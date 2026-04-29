@@ -20,6 +20,11 @@ class MealC
         return $this->model->addMeal($userId, $name, $type);
     }
 
+    public function updateMeal($mealId, $userId, $name, $type)
+    {
+        $this->model->updateMeal($mealId, $userId, $name, $type);
+    }
+
     public function deleteMeal($mealId, $userId)
     {
         $this->model->deleteMeal($mealId, $userId);
@@ -28,6 +33,11 @@ class MealC
     public function addMealIngredient($mealId, $ingredientId, $quantity)
     {
         $this->model->addMealIngredient($mealId, $ingredientId, $quantity);
+    }
+
+    public function addMealIngredientForUser($mealId, $userId, $ingredientId, $quantity)
+    {
+        $this->model->addMealIngredientForUser($mealId, $userId, $ingredientId, $quantity);
     }
 
     public function listMealIngredients($mealId)

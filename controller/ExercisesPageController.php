@@ -37,11 +37,47 @@ class ExercisesPageController
                 header('Location: exercises.php');
                 exit;
             }
+
+            if ($action === 'add_objective') {
+                $exerciseController->addObjective(
+                    $user['id'],
+                    (int) ($_POST['exercise_id'] ?? 0),
+                    trim($_POST['title'] ?? ''),
+                    (int) ($_POST['target_duration_min'] ?? 0),
+                    $_POST['start_date'] ?? '',
+                    $_POST['end_date'] ?? '',
+                    $_POST['status'] ?? 'active'
+                );
+                header('Location: exercises.php');
+                exit;
+            }
+
+            if ($action === 'update_objective') {
+                $exerciseController->updateObjective(
+                    (int) ($_POST['objective_id'] ?? 0),
+                    $user['id'],
+                    (int) ($_POST['exercise_id'] ?? 0),
+                    trim($_POST['title'] ?? ''),
+                    (int) ($_POST['target_duration_min'] ?? 0),
+                    $_POST['start_date'] ?? '',
+                    $_POST['end_date'] ?? '',
+                    $_POST['status'] ?? 'active'
+                );
+                header('Location: exercises.php');
+                exit;
+            }
+
+            if ($action === 'delete_objective') {
+                $exerciseController->deleteObjective((int) ($_POST['objective_id'] ?? 0), $user['id']);
+                header('Location: exercises.php');
+                exit;
+            }
         }
 
         return [
             'exerciseList' => $exerciseController->listExercises(),
-            'logs' => $exerciseController->listLogsByUser($user['id'])
+            'logs' => $exerciseController->listLogsByUser($user['id']),
+            'objectives' => $exerciseController->listObjectivesByUser($user['id'])
         ];
     }
 }

@@ -74,5 +74,72 @@ class ExerciseModel
         $stmt = $db->prepare('DELETE FROM user_exercise WHERE id=:id AND user_id=:uid');
         $stmt->execute(['id' => $logId, 'uid' => $userId]);
     }
+
+    public function listObjectivesByUser($userId)
+    {
+        $db = config::getConnexion();
+        $sql = 'SELECT o.id, o.user_id, o.exercise_id, o.title, o.target_duration_min,
+                       o.start_date, o.end_date, o.status, e.name AS exercise_name,
+                       COALESCE(SUM(ue.duration_min), 0) AS progress_min
+                FROM objective o
+                JOIN exercise e ON e.id = o.exercise_id
+                LEFT JOIN user_exercise ue
+                    ON ue.user_id = o.user_id
+                    AND ue.exercise_id = o.exercise_id
+                    AND ue.date_done BETWEEN o.start_date AND o.end_date
+                WHERE o.user_id = :uid
+                GROUP BY o.id, o.user_id, o.exercise_id, o.title, o.target_duration_min,
+                         o.start_date, o.end_date, o.status, e.name
+                ORDER BY o.end_date ASC, o.id DESC';
+        $stmt = $db->prepare($sql);
+        $stmt->execute(['uid' => $userId]);
+        return $stmt->fetchAll();
+    }
+
+    public function addObjective($userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare(
+            'INSERT INTO objective (user_id, exercise_id, title, target_duration_min, start_date, end_date, status)
+             VALUES (:uid, :eid, :title, :target, :start_date, :end_date, :status)'
+        );
+        $stmt->execute([
+            'uid' => $userId,
+            'eid' => $exerciseId,
+            'title' => $title,
+            'target' => $targetDurationMin,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'status' => $status
+        ]);
+    }
+
+    public function updateObjective($objectiveId, $userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare(
+            'UPDATE objective
+             SET exercise_id=:eid, title=:title, target_duration_min=:target,
+                 start_date=:start_date, end_date=:end_date, status=:status
+             WHERE id=:id AND user_id=:uid'
+        );
+        $stmt->execute([
+            'id' => $objectiveId,
+            'uid' => $userId,
+            'eid' => $exerciseId,
+            'title' => $title,
+            'target' => $targetDurationMin,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'status' => $status
+        ]);
+    }
+
+    public function deleteObjective($objectiveId, $userId)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare('DELETE FROM objective WHERE id=:id AND user_id=:uid');
+        $stmt->execute(['id' => $objectiveId, 'uid' => $userId]);
+    }
 }
 ?>

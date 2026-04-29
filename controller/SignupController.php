@@ -10,7 +10,8 @@ class SignupController
         }
 
         if (isset($_SESSION['user'])) {
-            header('Location: dashboard.php');
+            $destination = ($_SESSION['user']['role'] ?? 'user') === 'admin' ? 'admin/index.php' : 'dashboard.php';
+            header('Location: ' . $destination);
             exit;
         }
 

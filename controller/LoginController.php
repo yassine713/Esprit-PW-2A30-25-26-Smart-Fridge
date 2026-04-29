@@ -10,7 +10,7 @@ class LoginController
         }
 
         if (isset($_SESSION['user'])) {
-            header('Location: dashboard.php');
+            header('Location: ' . $this->redirectFor($_SESSION['user']));
             exit;
         }
 
@@ -23,7 +23,7 @@ class LoginController
 
             if ($user) {
                 $_SESSION['user'] = $user;
-                header('Location: dashboard.php');
+                header('Location: ' . $this->redirectFor($user));
                 exit;
             }
 
@@ -31,6 +31,11 @@ class LoginController
         }
 
         return ['error' => $error];
+    }
+
+    private function redirectFor($user)
+    {
+        return ($user['role'] ?? 'user') === 'admin' ? 'admin/index.php' : 'dashboard.php';
     }
 }
 ?>

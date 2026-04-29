@@ -49,5 +49,25 @@ class ExerciseC
     {
         $this->model->deleteLog($logId, $userId);
     }
+
+    public function listObjectivesByUser($userId)
+    {
+        return $this->model->listObjectivesByUser($userId);
+    }
+
+    public function addObjective($userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
+    {
+        $this->model->addObjective($userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status);
+    }
+
+    public function updateObjective($objectiveId, $userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
+    {
+        $this->model->updateObjective($objectiveId, $userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status);
+    }
+
+    public function deleteObjective($objectiveId, $userId)
+    {
+        $this->model->deleteObjective($objectiveId, $userId);
+    }
 }
 ?>

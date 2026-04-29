@@ -33,9 +33,7 @@ $supportPageController = new SupportPageController();
           <a class="nav-link" href="store.php">Store</a>
           <a class="nav-link" href="profile.php">Profile</a>
           <a class="nav-link active" href="support.php">Support</a>
-          <?php if ($user['role'] === 'admin'): ?>
-            <a class="nav-link" href="admin.php">Admin</a>
-          <?php endif; ?>
+          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
         </nav>
       </aside>
 

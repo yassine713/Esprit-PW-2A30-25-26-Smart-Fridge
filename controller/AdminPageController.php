@@ -8,7 +8,31 @@ require_once __DIR__ . '/CategoryC.php';
 
 class AdminPageController
 {
-    public function handle($user)
+    private function validNumber($value, $max, $wholeNumber = false)
+    {
+        $value = trim((string) $value);
+        $pattern = $wholeNumber ? '/^\d+$/' : '/^\d+(\.\d+)?$/';
+
+        if (!preg_match($pattern, $value)) {
+            return false;
+        }
+
+        $number = (float) $value;
+        return $number >= 0 && $number <= $max;
+    }
+
+    private function validIngredientInput($name, $calories, $protein, $carbs, $fat, $price)
+    {
+        return strlen(trim($name)) >= 2
+            && strlen(trim($name)) <= 80
+            && $this->validNumber($calories, 5000, true)
+            && $this->validNumber($protein, 1000)
+            && $this->validNumber($carbs, 1000)
+            && $this->validNumber($fat, 1000)
+            && $this->validNumber($price, 999999);
+    }
+
+    public function handle($user, $redirectTo = 'admin.php')
     {
         $userController = new UserC();
         $ingredientController = new IngredientC();
@@ -27,25 +51,36 @@ class AdminPageController
                 $userController->deleteUser((int) ($_POST['user_id'] ?? 0));
             }
             if ($action === 'add_ingredient') {
-                $ingredientController->add(
-                    trim($_POST['name'] ?? ''),
-                    $_POST['calories'] ?? 0,
-                    $_POST['protein'] ?? 0,
-                    $_POST['carbs'] ?? 0,
-                    $_POST['fat'] ?? 0,
-                    $_POST['price'] ?? 0
-                );
+                $name = trim($_POST['name'] ?? '');
+                $calories = $_POST['calories'] ?? '';
+                $protein = $_POST['protein'] ?? '';
+                $carbs = $_POST['carbs'] ?? '';
+                $fat = $_POST['fat'] ?? '';
+                $price = $_POST['price'] ?? '';
+
+                if ($this->validIngredientInput($name, $calories, $protein, $carbs, $fat, $price)) {
+                    $ingredientController->add($name, $calories, $protein, $carbs, $fat, $price);
+                }
             }
             if ($action === 'update_ingredient') {
-                $ingredientController->update(
-                    (int) ($_POST['ingredient_id'] ?? 0),
-                    trim($_POST['name'] ?? ''),
-                    $_POST['calories'] ?? 0,
-                    $_POST['protein'] ?? 0,
-                    $_POST['carbs'] ?? 0,
-                    $_POST['fat'] ?? 0,
-                    $_POST['price'] ?? 0
-                );
+                $name = trim($_POST['name'] ?? '');
+                $calories = $_POST['calories'] ?? '';
+                $protein = $_POST['protein'] ?? '';
+                $carbs = $_POST['carbs'] ?? '';
+                $fat = $_POST['fat'] ?? '';
+                $price = $_POST['price'] ?? '';
+
+                if ($this->validIngredientInput($name, $calories, $protein, $carbs, $fat, $price)) {
+                    $ingredientController->update(
+                        (int) ($_POST['ingredient_id'] ?? 0),
+                        $name,
+                        $calories,
+                        $protein,
+                        $carbs,
+                        $fat,
+                        $price
+                    );
+                }
             }
             if ($action === 'delete_ingredient') {
                 $ingredientController->delete((int) ($_POST['ingredient_id'] ?? 0));
@@ -97,7 +132,7 @@ class AdminPageController
                 $supportController->addResponse((int) ($_POST['request_id'] ?? 0), $user['id'], trim($_POST['message'] ?? ''));
             }
 
-            header('Location: admin.php');
+            header('Location: ' . $redirectTo);
             exit;
         }
 

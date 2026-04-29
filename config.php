@@ -1,4 +1,8 @@
 <?php
+if (!defined('YOUTUBE_API_KEY')) {
+    define('YOUTUBE_API_KEY', 'AIzaSyBmM-G8JUZZnRVWmgET6Ed0IXnXSrki8YQ');
+}
+
 class config
 {
     private static $pdo = null;

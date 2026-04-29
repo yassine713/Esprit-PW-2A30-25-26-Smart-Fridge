@@ -7,7 +7,8 @@ $user = $_SESSION['user'];
 $exercisesPageController = new ExercisesPageController();
 [
   'exerciseList' => $exerciseList,
-  'logs' => $logs
+  'logs' => $logs,
+  'objectives' => $objectives
 ] = $exercisesPageController->handle($user);
 ?>
 <!doctype html>
@@ -36,9 +37,7 @@ $exercisesPageController = new ExercisesPageController();
           <a class="nav-link" href="store.php">Store</a>
           <a class="nav-link" href="profile.php">Profile</a>
           <a class="nav-link" href="support.php">Support</a>
-          <?php if ($user['role'] === 'admin'): ?>
-            <a class="nav-link" href="admin.php">Admin</a>
-          <?php endif; ?>
+          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
         </nav>
       </aside>
 
@@ -73,11 +72,122 @@ $exercisesPageController = new ExercisesPageController();
               </label>
               <label>
                 <span>Date</span>
-                <input id="ex-date" name="date_done" type="text" placeholder="YYYY-MM-DD" />
+                <input id="ex-date" name="date_done" type="date" />
                 <small class="error" data-error-for="ex-date"></small>
               </label>
               <button class="btn primary" type="submit">Add Exercise</button>
             </form>
+          </div>
+
+          <div class="card">
+            <h3>Objective</h3>
+            <form id="objective-form" method="post" novalidate>
+              <input type="hidden" name="action" value="add_objective" />
+              <label>
+                <span>Title</span>
+                <input id="obj-title" name="title" type="text" placeholder="e.g., Run 120 minutes this month" />
+                <small class="error" data-error-for="obj-title"></small>
+              </label>
+              <label>
+                <span>Exercise</span>
+                <select id="obj-exercise" name="exercise_id">
+                  <option value="">Choose exercise</option>
+                  <?php foreach ($exerciseList as $ex): ?>
+                    <option value="<?= $ex['id'] ?>"><?= htmlspecialchars($ex['name']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+                <small class="error" data-error-for="obj-exercise"></small>
+              </label>
+              <label>
+                <span>Target duration (minutes)</span>
+                <input id="obj-target" name="target_duration_min" type="text" placeholder="e.g., 120" />
+                <small class="error" data-error-for="obj-target"></small>
+              </label>
+              <div class="input-row">
+                <label>
+                  <span>Start date</span>
+                  <input id="obj-start" name="start_date" type="date" />
+                  <small class="error" data-error-for="obj-start"></small>
+                </label>
+                <label>
+                  <span>End date</span>
+                  <input id="obj-end" name="end_date" type="date" />
+                  <small class="error" data-error-for="obj-end"></small>
+                </label>
+              </div>
+              <label>
+                <span>Status</span>
+                <select name="status">
+                  <option value="active">Active</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </label>
+              <button class="btn primary" type="submit">Add Objective</button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h3>My Objectives</h3>
+            <?php if (!$objectives): ?>
+              <p class="muted">No objectives yet.</p>
+            <?php else: ?>
+              <div class="reclamations">
+                <?php foreach ($objectives as $objective): ?>
+                  <?php
+                    $target = max(1, (int) $objective['target_duration_min']);
+                    $progress = (int) $objective['progress_min'];
+                    $percent = min(100, round(($progress / $target) * 100));
+                  ?>
+                  <div class="reclamation objective-item">
+                    <div class="rec-main">
+                      <div class="objective-summary">
+                        <h4><?= htmlspecialchars($objective['title']) ?></h4>
+                        <p>
+                          <?= htmlspecialchars($objective['exercise_name']) ?>:
+                          <?= $progress ?> / <?= htmlspecialchars($objective['target_duration_min']) ?> minutes
+                        </p>
+                        <div class="objective-progress" aria-label="Objective progress">
+                          <span style="width: <?= $percent ?>%"></span>
+                        </div>
+                        <div class="meta">
+                          <span><?= htmlspecialchars($objective['start_date']) ?> to <?= htmlspecialchars($objective['end_date']) ?></span>
+                          <span class="status <?= htmlspecialchars($objective['status']) ?>"><?= htmlspecialchars($objective['status']) ?></span>
+                        </div>
+                      </div>
+                      <form method="post" class="inline-edit objective-edit" novalidate>
+                        <input type="hidden" name="action" value="update_objective" />
+                        <input type="hidden" name="objective_id" value="<?= $objective['id'] ?>" />
+                        <input type="text" name="title" value="<?= htmlspecialchars($objective['title']) ?>" />
+                        <select name="exercise_id">
+                          <?php foreach ($exerciseList as $ex): ?>
+                            <option value="<?= $ex['id'] ?>" <?= (int) $ex['id'] === (int) $objective['exercise_id'] ? 'selected' : '' ?>><?= htmlspecialchars($ex['name']) ?></option>
+                          <?php endforeach; ?>
+                        </select>
+                        <input type="text" name="target_duration_min" value="<?= htmlspecialchars($objective['target_duration_min']) ?>" />
+                        <div class="input-row">
+                          <input type="date" name="start_date" value="<?= htmlspecialchars($objective['start_date']) ?>" />
+                          <input type="date" name="end_date" value="<?= htmlspecialchars($objective['end_date']) ?>" />
+                        </div>
+                        <select name="status">
+                          <option value="active" <?= $objective['status'] === 'active' ? 'selected' : '' ?>>Active</option>
+                          <option value="completed" <?= $objective['status'] === 'completed' ? 'selected' : '' ?>>Completed</option>
+                        </select>
+                        <div class="actions">
+                          <button class="icon-btn" type="submit">Save</button>
+                        </div>
+                      </form>
+                    </div>
+                    <div class="actions">
+                      <form method="post">
+                        <input type="hidden" name="action" value="delete_objective" />
+                        <input type="hidden" name="objective_id" value="<?= $objective['id'] ?>" />
+                        <button class="icon-btn danger" type="submit">Delete</button>
+                      </form>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
           </div>
 
           <div class="card">
@@ -98,7 +208,7 @@ $exercisesPageController = new ExercisesPageController();
                           <?php endforeach; ?>
                         </select>
                         <input type="text" name="duration_min" value="<?= htmlspecialchars($log['duration_min']) ?>" />
-                        <input type="text" name="date_done" value="<?= htmlspecialchars($log['date_done']) ?>" />
+                        <input type="date" name="date_done" value="<?= htmlspecialchars($log['date_done']) ?>" />
                         <div class="actions">
                           <button class="icon-btn" type="submit">Save</button>
                         </div>
@@ -123,9 +233,15 @@ $exercisesPageController = new ExercisesPageController();
 
   <script>
     const form = document.getElementById('exercise-form');
+    const objectiveForm = document.getElementById('objective-form');
     const nameField = document.getElementById('ex-name');
     const durationField = document.getElementById('ex-duration');
     const dateField = document.getElementById('ex-date');
+    const objectiveTitle = document.getElementById('obj-title');
+    const objectiveExercise = document.getElementById('obj-exercise');
+    const objectiveTarget = document.getElementById('obj-target');
+    const objectiveStart = document.getElementById('obj-start');
+    const objectiveEnd = document.getElementById('obj-end');
 
     function setError(id, message) {
       const el = document.querySelector(`[data-error-for="${id}"]`);
@@ -140,7 +256,18 @@ $exercisesPageController = new ExercisesPageController();
       let ok = true;
       if (nameField.value.trim() === '') { setError('ex-name', 'Choose an exercise.'); ok = false; } else clearError('ex-name');
       if (!/^[0-9]{1,3}$/.test(durationField.value.trim()) || Number(durationField.value) <= 0) { setError('ex-duration', 'Duration must be a positive number.'); ok = false; } else clearError('ex-duration');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateField.value.trim())) { setError('ex-date', 'Date format must be YYYY-MM-DD.'); ok = false; } else clearError('ex-date');
+      if (dateField.value.trim() === '') { setError('ex-date', 'Choose a date.'); ok = false; } else clearError('ex-date');
+      if (!ok) e.preventDefault();
+    });
+
+    objectiveForm.addEventListener('submit', (e) => {
+      let ok = true;
+      if (objectiveTitle.value.trim().length < 3) { setError('obj-title', 'Title must contain at least 3 characters.'); ok = false; } else clearError('obj-title');
+      if (objectiveExercise.value.trim() === '') { setError('obj-exercise', 'Choose an exercise.'); ok = false; } else clearError('obj-exercise');
+      if (!/^[0-9]{1,4}$/.test(objectiveTarget.value.trim()) || Number(objectiveTarget.value) <= 0) { setError('obj-target', 'Target must be a positive number.'); ok = false; } else clearError('obj-target');
+      if (objectiveStart.value.trim() === '') { setError('obj-start', 'Choose a start date.'); ok = false; } else clearError('obj-start');
+      if (objectiveEnd.value.trim() === '') { setError('obj-end', 'Choose an end date.'); ok = false; } else clearError('obj-end');
+      if (objectiveStart.value && objectiveEnd.value && objectiveStart.value > objectiveEnd.value) { setError('obj-end', 'End date must be after the start date.'); ok = false; }
       if (!ok) e.preventDefault();
     });
   </script>

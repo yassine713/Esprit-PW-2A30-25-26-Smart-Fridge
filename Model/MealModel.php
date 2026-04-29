@@ -19,6 +19,13 @@ class MealModel
         return $db->lastInsertId();
     }
 
+    public function updateMeal($mealId, $userId, $name, $type)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare('UPDATE custom_meal SET name = :name, type = :type WHERE id = :id AND user_id = :uid');
+        $stmt->execute(['id' => $mealId, 'uid' => $userId, 'name' => $name, 'type' => $type]);
+    }
+
     public function deleteMeal($mealId, $userId)
     {
         $db = config::getConnexion();
@@ -31,6 +38,18 @@ class MealModel
         $db = config::getConnexion();
         $stmt = $db->prepare('INSERT INTO meal_ingredient (meal_id, ingredient_id, quantity_g) VALUES (:mid, :iid, :qty)');
         $stmt->execute(['mid' => $mealId, 'iid' => $ingredientId, 'qty' => $quantity]);
+    }
+
+    public function addMealIngredientForUser($mealId, $userId, $ingredientId, $quantity)
+    {
+        $db = config::getConnexion();
+        $sql = 'INSERT INTO meal_ingredient (meal_id, ingredient_id, quantity_g)
+                SELECT :mid, :iid, :qty
+                FROM custom_meal
+                WHERE id = :mid AND user_id = :uid
+                LIMIT 1';
+        $stmt = $db->prepare($sql);
+        $stmt->execute(['mid' => $mealId, 'uid' => $userId, 'iid' => $ingredientId, 'qty' => $quantity]);
     }
 
     public function listMealIngredients($mealId)

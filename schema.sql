@@ -96,6 +96,20 @@ CREATE TABLE user_exercise (
   CONSTRAINT fk_user_exercise_exercise FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE
 );
 
+CREATE TABLE objective (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  exercise_id INT NOT NULL,
+  title VARCHAR(150) NOT NULL,
+  target_duration_min INT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  status ENUM('active','completed') NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_objective_user FOREIGN KEY (user_id) REFERENCES `user`(id) ON DELETE CASCADE,
+  CONSTRAINT fk_objective_exercise FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE
+);
+
 CREATE TABLE product (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(150) NOT NULL,
