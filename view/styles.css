@@ -2931,3 +2931,7 @@ body {
     padding-right: 0;
   }
 }
+
+.support-columns {
+  grid-template-columns: 1fr !important;
+}
