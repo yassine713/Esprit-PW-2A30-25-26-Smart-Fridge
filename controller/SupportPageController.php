@@ -45,7 +45,14 @@ class SupportPageController
             }
         }
 
-        return ['requests' => $supportController->listByUser($user['id'])];
+        $requests = $supportController->listByUser($user['id']);
+        $requestIds = array_map(fn($request) => (int) $request['id'], $requests);
+
+        return [
+            'requests' => $requests,
+            'requestStats' => $supportController->getTypeStatsByUser($user['id']),
+            'responsesByRequest' => $supportController->listResponsesForRequestIds($requestIds)
+        ];
     }
 }
 ?>

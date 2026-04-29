@@ -25,6 +25,11 @@ class SupportC
         return $this->model->listAll();
     }
 
+    public function getTypeStatsByUser($userId)
+    {
+        return $this->model->getTypeStatsByUser($userId);
+    }
+
     public function updateRequest($id, $userId, $first, $last, $email, $type, $title, $desc)
     {
         $this->model->updateRequest($id, $userId, $first, $last, $email, $type, $title, $desc);
@@ -40,9 +45,24 @@ class SupportC
         $this->model->addResponse($requestId, $adminId, $message);
     }
 
+    public function updateResponse($responseId, $message)
+    {
+        $this->model->updateResponse($responseId, $message);
+    }
+
+    public function deleteResponse($responseId)
+    {
+        $this->model->deleteResponse($responseId);
+    }
+
     public function listResponses($requestId)
     {
         return $this->model->listResponses($requestId);
+    }
+
+    public function listResponsesForRequestIds($requestIds)
+    {
+        return $this->model->listResponsesForRequestIds($requestIds);
     }
 }
 ?>

@@ -13,7 +13,8 @@ $adminPageController = new AdminPageController();
   'products' => $products,
   'categories' => $categories,
   'productCategoryIds' => $productCategoryIds,
-  'productCategoryNames' => $productCategoryNames
+  'productCategoryNames' => $productCategoryNames,
+  'responsesByRequest' => $responsesByRequest
 ] = $adminPageController->handle($user, 'index.php');
 
 if (!function_exists('e')) {
@@ -372,22 +373,62 @@ if (!function_exists('e')) {
               </div>
               <span><?= count($requests) ?></span>
             </div>
+            <div class="store-filters support-admin-filters" aria-label="Support type filters">
+              <button class="filter-chip active" type="button" data-support-filter="all">All</button>
+              <button class="filter-chip" type="button" data-support-filter="Exercise">Exercise</button>
+              <button class="filter-chip" type="button" data-support-filter="Meal">Meal</button>
+              <button class="filter-chip" type="button" data-support-filter="Profile">Profile</button>
+            </div>
+            <p class="muted store-empty" id="support-empty-filter" hidden></p>
             <div class="admin-list">
               <?php foreach ($requests as $r): ?>
-                <article class="admin-item support-admin-item">
+                <?php $responses = $responsesByRequest[(int) $r['id']] ?? []; ?>
+                <article class="admin-item support-admin-item" data-support-type="<?= e($r['type']) ?>">
                   <div class="admin-item-main">
                     <h4><?= e($r['issue_title']) ?></h4>
                     <p><?= e($r['description']) ?></p>
                     <div class="meta">
+                      <span class="support-type-pill"><?= e($r['type']) ?></span>
                       <span><?= e($r['email']) ?></span>
                       <span class="status <?= e($r['status']) ?>"><?= e($r['status']) ?></span>
                     </div>
-                    <form method="post" class="admin-form compact" novalidate>
+                    <div class="support-admin-identity">
+                      <span><?= e($r['first_name'] . ' ' . $r['last_name']) ?></span>
+                      <span><?= e($r['created_at']) ?></span>
+                    </div>
+                    <form method="post" class="admin-form compact support-response-create" novalidate>
                       <input type="hidden" name="action" value="add_response" />
                       <input type="hidden" name="request_id" value="<?= e($r['id']) ?>" />
                       <input type="text" name="message" placeholder="Response message" />
                       <button class="icon-btn" type="submit">Respond</button>
+                      <small class="error form-error">Response message must be at least 2 characters.</small>
                     </form>
+
+                    <?php if ($responses): ?>
+                      <div class="support-response-thread admin-response-thread">
+                        <span class="support-thread-label">Response thread</span>
+                        <?php foreach ($responses as $response): ?>
+                          <div class="support-response-item admin-response-item">
+                            <div class="support-response-meta">
+                              <strong><?= e($response['admin_name'] ?? 'Admin') ?></strong>
+                              <span><?= e($response['responded_at']) ?></span>
+                            </div>
+                            <form method="post" class="admin-form compact support-response-edit" novalidate>
+                              <input type="hidden" name="action" value="update_response" />
+                              <input type="hidden" name="response_id" value="<?= e($response['id']) ?>" />
+                              <input type="text" name="message" value="<?= e($response['message']) ?>" />
+                              <button class="icon-btn" type="submit">Save</button>
+                              <small class="error form-error">Response message must be at least 2 characters.</small>
+                            </form>
+                            <form method="post">
+                              <input type="hidden" name="action" value="delete_response" />
+                              <input type="hidden" name="response_id" value="<?= e($response['id']) ?>" />
+                              <button class="icon-btn danger" type="submit">Delete</button>
+                            </form>
+                          </div>
+                        <?php endforeach; ?>
+                      </div>
+                    <?php endif; ?>
                   </div>
                 </article>
               <?php endforeach; ?>
@@ -412,6 +453,9 @@ if (!function_exists('e')) {
     const ingredientCarbs = document.getElementById('ing-carbs');
     const ingredientFat = document.getElementById('ing-fat');
     const ingredientPrice = document.getElementById('ing-price');
+    const supportFilterButtons = Array.from(document.querySelectorAll('[data-support-filter]'));
+    const supportCards = Array.from(document.querySelectorAll('.support-admin-item'));
+    const supportEmptyFilter = document.getElementById('support-empty-filter');
 
     function setError(id, message) {
       const el = document.querySelector(`[data-error-for="${id}"]`);
@@ -446,6 +490,17 @@ if (!function_exists('e')) {
 
       categoryForm.addEventListener('submit', (e) => {
         const ok = choices.some((choice) => choice.checked);
+        if (error) error.classList.toggle('is-visible', !ok);
+        if (!ok) e.preventDefault();
+      });
+    });
+
+    document.querySelectorAll('.support-response-create, .support-response-edit').forEach((responseForm) => {
+      const messageInput = responseForm.querySelector('input[name="message"]');
+      const error = responseForm.querySelector('.error');
+
+      responseForm.addEventListener('submit', (e) => {
+        const ok = messageInput && messageInput.value.trim().length >= 2;
         if (error) error.classList.toggle('is-visible', !ok);
         if (!ok) e.preventDefault();
       });
@@ -523,6 +578,25 @@ if (!function_exists('e')) {
     window.addEventListener('resize', () => {
       const active = navLinks.find((link) => link.classList.contains('active'));
       if (active) setActivePanel(active.getAttribute('href').slice(1));
+    });
+
+    supportFilterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const filter = button.dataset.supportFilter;
+        let visibleCount = 0;
+        supportFilterButtons.forEach((item) => item.classList.toggle('active', item === button));
+
+        supportCards.forEach((card) => {
+          const show = filter === 'all' || card.dataset.supportType === filter;
+          card.hidden = !show;
+          if (show) visibleCount += 1;
+        });
+
+        if (supportEmptyFilter) {
+          supportEmptyFilter.textContent = visibleCount ? '' : 'No support requests found for this type.';
+          supportEmptyFilter.hidden = visibleCount > 0;
+        }
+      });
     });
   </script>
 </body>

@@ -285,7 +285,19 @@ class AdminPageController
                 $productController->delete((int) ($_POST['product_id'] ?? 0));
             }
             if ($action === 'add_response') {
-                $supportController->addResponse((int) ($_POST['request_id'] ?? 0), $user['id'], trim($_POST['message'] ?? ''));
+                $message = trim($_POST['message'] ?? '');
+                if ($message !== '') {
+                    $supportController->addResponse((int) ($_POST['request_id'] ?? 0), $user['id'], $message);
+                }
+            }
+            if ($action === 'update_response') {
+                $message = trim($_POST['message'] ?? '');
+                if ($message !== '') {
+                    $supportController->updateResponse((int) ($_POST['response_id'] ?? 0), $message);
+                }
+            }
+            if ($action === 'delete_response') {
+                $supportController->deleteResponse((int) ($_POST['response_id'] ?? 0));
             }
 
             header('Location: ' . $redirectTo);
@@ -293,6 +305,7 @@ class AdminPageController
         }
 
         $products = $productController->listAll();
+        $requests = $supportController->listAll();
         $productCategoryIds = [];
         $productCategoryNames = [];
         foreach ($products as $product) {
@@ -301,15 +314,21 @@ class AdminPageController
             $productCategoryNames[$product['id']] = array_map(fn($category) => $category['name'], $productCategories);
         }
 
+        $responsesByRequest = $supportController->listResponsesForRequestIds(array_map(
+            fn($request) => (int) $request['id'],
+            $requests
+        ));
+
         return [
             'users' => $userController->listUsers(),
             'ingredients' => $ingredientController->listAll(),
-            'requests' => $supportController->listAll(),
+            'requests' => $requests,
             'exercises' => $exerciseController->listExercises(),
             'products' => $products,
             'categories' => $categoryController->listAllWithProductCounts(),
             'productCategoryIds' => $productCategoryIds,
-            'productCategoryNames' => $productCategoryNames
+            'productCategoryNames' => $productCategoryNames,
+            'responsesByRequest' => $responsesByRequest
         ];
     }
 }
