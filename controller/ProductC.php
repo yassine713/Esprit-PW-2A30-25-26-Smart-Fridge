@@ -15,6 +15,11 @@ class ProductC
         return $this->model->listAll();
     }
 
+    public function listAllForStore()
+    {
+        return $this->model->listAllForStore();
+    }
+
     public function listCategories($productId)
     {
         return $this->model->listCategories($productId);
@@ -25,9 +30,9 @@ class ProductC
         $this->model->setCategories($productId, $categoryIds);
     }
 
-    public function add($name, $description, $price, $stock, $imageUrl = null)
+    public function add($name, $description, $price, $stock, $imageUrl = null, $categoryId = null)
     {
-        $this->model->add($name, $description, $price, $stock, $imageUrl);
+        return $this->model->add($name, $description, $price, $stock, $imageUrl, $categoryId);
     }
 
     public function update($id, $name, $description, $price, $stock, $imageUrl = null)

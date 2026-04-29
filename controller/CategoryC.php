@@ -15,6 +15,11 @@ class CategoryC
         return $this->model->listAll();
     }
 
+    public function listAllWithProductCounts()
+    {
+        return $this->model->listAllWithProductCounts();
+    }
+
     public function add($name)
     {
         $this->model->add($name);

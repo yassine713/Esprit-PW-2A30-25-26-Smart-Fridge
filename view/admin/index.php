@@ -12,7 +12,8 @@ $adminPageController = new AdminPageController();
   'exercises' => $exercises,
   'products' => $products,
   'categories' => $categories,
-  'productCategoryIds' => $productCategoryIds
+  'productCategoryIds' => $productCategoryIds,
+  'productCategoryNames' => $productCategoryNames
 ] = $adminPageController->handle($user, 'index.php');
 
 if (!function_exists('e')) {
@@ -167,20 +168,31 @@ if (!function_exists('e')) {
               </div>
               <span><?= count($categories) ?></span>
             </div>
-            <form method="post" class="admin-form compact" novalidate>
+            <form method="post" class="admin-form compact category-form" novalidate>
               <input type="hidden" name="action" value="add_category" />
-              <input type="text" name="c_name" placeholder="Category name" />
+              <input type="text" name="c_name" placeholder="Category name, e.g. Fruit" required minlength="2" maxlength="150" pattern="[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ &,'.-]*" />
               <button class="icon-btn" type="submit">Add</button>
+              <small class="error form-error">Use 2-150 letters only. Spaces, &, comma, apostrophe, dot and dash are allowed.</small>
             </form>
             <div class="admin-list">
+              <?php if (!$categories): ?>
+                <article class="admin-item empty-admin-item">
+                  <div class="admin-item-main">
+                    <h4>No categories yet</h4>
+                    <p>Create the first food category, then assign products to it.</p>
+                  </div>
+                </article>
+              <?php endif; ?>
               <?php foreach ($categories as $c): ?>
-                <article class="admin-item">
-                  <form method="post" class="admin-form compact" novalidate>
+                <article class="admin-item category-admin-item">
+                  <form method="post" class="admin-form compact category-form" novalidate>
                     <input type="hidden" name="action" value="update_category" />
                     <input type="hidden" name="category_id" value="<?= e($c['id']) ?>" />
-                    <input type="text" name="c_name" value="<?= e($c['name']) ?>" />
+                    <input type="text" name="c_name" value="<?= e($c['name']) ?>" required minlength="2" maxlength="150" pattern="[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ &,'.-]*" />
                     <button class="icon-btn" type="submit">Save</button>
+                    <small class="error form-error">Use 2-150 letters only. Spaces, &, comma, apostrophe, dot and dash are allowed.</small>
                   </form>
+                  <span class="category-count"><?= (int) ($c['product_count'] ?? 0) ?> products</span>
                   <form method="post">
                     <input type="hidden" name="action" value="delete_category" />
                     <input type="hidden" name="category_id" value="<?= e($c['id']) ?>" />
@@ -201,41 +213,65 @@ if (!function_exists('e')) {
             </div>
             <form method="post" class="admin-form grid-form" id="product-form" novalidate>
               <input type="hidden" name="action" value="add_product" />
-              <input type="text" name="p_name" id="p-name" placeholder="Name" />
-              <input type="text" name="p_description" id="p-description" placeholder="Description" />
-              <input type="text" name="p_price" id="p-price" placeholder="Price" />
-              <input type="text" name="p_stock" id="p-stock" placeholder="Stock" />
-              <input type="text" name="p_image_url" id="p-image" placeholder="Image URL (optional)" />
+              <input type="text" name="p_name" id="p-name" placeholder="Name" required minlength="2" maxlength="150" />
+              <input type="text" name="p_description" id="p-description" placeholder="Description" required minlength="4" maxlength="1000" />
+              <input type="number" name="p_price" id="p-price" placeholder="Price" required min="0" max="999999" step="0.01" />
+              <input type="number" name="p_stock" id="p-stock" placeholder="Stock" required min="0" max="999999" step="1" />
+              <div class="auto-image-note">Image is selected automatically from the product name.</div>
+              <div class="category-picker" id="p-categories" role="radiogroup" aria-label="Product category">
+                <?php foreach ($categories as $c): ?>
+                  <label>
+                    <input type="radio" name="category_id" value="<?= e($c['id']) ?>" />
+                    <span><?= e($c['name']) ?></span>
+                  </label>
+                <?php endforeach; ?>
+              </div>
               <button class="icon-btn" type="submit">Add</button>
               <small class="error" data-error-for="p-name"></small>
               <small class="error" data-error-for="p-description"></small>
               <small class="error" data-error-for="p-price"></small>
               <small class="error" data-error-for="p-stock"></small>
+              <small class="error" data-error-for="p-categories"></small>
             </form>
             <div class="admin-list">
               <?php foreach ($products as $p): ?>
                 <article class="admin-item product-admin-item">
                   <div class="admin-item-main">
-                    <form method="post" class="admin-form grid-form" novalidate>
+                    <?php $pcatNames = $productCategoryNames[$p['id']] ?? []; ?>
+                    <div class="category-chip-row" aria-label="Product categories">
+                      <?php if ($pcatNames): ?>
+                        <?php foreach ($pcatNames as $categoryName): ?>
+                          <span><?= e($categoryName) ?></span>
+                        <?php endforeach; ?>
+                      <?php else: ?>
+                        <span class="muted-chip">No category</span>
+                      <?php endif; ?>
+                    </div>
+                    <form method="post" class="admin-form grid-form">
                       <input type="hidden" name="action" value="update_product" />
                       <input type="hidden" name="product_id" value="<?= e($p['id']) ?>" />
-                      <input type="text" name="p_name" value="<?= e($p['name']) ?>" />
-                      <input type="text" name="p_description" value="<?= e($p['description']) ?>" />
-                      <input type="text" name="p_price" value="<?= e($p['price']) ?>" />
-                      <input type="text" name="p_stock" value="<?= e($p['stock']) ?>" />
-                      <input type="text" name="p_image_url" value="<?= e($p['image_url']) ?>" />
+                      <input type="text" name="p_name" value="<?= e($p['name']) ?>" required minlength="2" maxlength="150" />
+                      <input type="text" name="p_description" value="<?= e($p['description']) ?>" required minlength="4" maxlength="1000" />
+                      <input type="number" name="p_price" value="<?= e($p['price']) ?>" required min="0" max="999999" step="0.01" />
+                      <input type="number" name="p_stock" value="<?= e($p['stock']) ?>" required min="0" max="999999" step="1" />
+                      <input type="hidden" name="p_image_url" value="<?= e($p['image_url']) ?>" />
+                      <div class="auto-image-note">Image updates automatically for auto-selected product photos.</div>
                       <button class="icon-btn" type="submit">Save</button>
                     </form>
-                    <form method="post" class="admin-form compact" novalidate>
+                    <form method="post" class="admin-form compact product-category-form" novalidate>
                       <input type="hidden" name="action" value="set_product_categories" />
                       <input type="hidden" name="product_id" value="<?= e($p['id']) ?>" />
-                      <select name="category_ids[]" multiple>
+                      <div class="category-picker compact-picker" role="radiogroup" aria-label="Product category">
                         <?php $pcatIds = $productCategoryIds[$p['id']] ?? []; ?>
                         <?php foreach ($categories as $c): ?>
-                          <option value="<?= e($c['id']) ?>" <?= in_array($c['id'], $pcatIds) ? 'selected' : '' ?>><?= e($c['name']) ?></option>
+                          <label>
+                            <input type="radio" name="category_id" value="<?= e($c['id']) ?>" <?= in_array($c['id'], $pcatIds) ? 'checked' : '' ?> />
+                            <span><?= e($c['name']) ?></span>
+                          </label>
                         <?php endforeach; ?>
-                      </select>
+                      </div>
                       <button class="icon-btn" type="submit">Save Categories</button>
+                      <small class="error form-error">Select one category.</small>
                     </form>
                   </div>
                   <form method="post">
@@ -368,6 +404,7 @@ if (!function_exists('e')) {
     const descField = document.getElementById('p-description');
     const priceField = document.getElementById('p-price');
     const stockField = document.getElementById('p-stock');
+    const productCategories = document.getElementById('p-categories');
     const ingredientForm = document.getElementById('ingredient-form');
     const ingredientName = document.getElementById('ing-name');
     const ingredientCalories = document.getElementById('ing-calories');
@@ -386,12 +423,41 @@ if (!function_exists('e')) {
       if (el) el.textContent = '';
     }
 
+    function validateCategoryName(value) {
+      return /^[A-Za-zÀ-ÿ][A-Za-zÀ-ÿ &,'.-]*$/.test(value) && value.length >= 2 && value.length <= 150;
+    }
+
+    document.querySelectorAll('.category-form').forEach((categoryForm) => {
+      const input = categoryForm.querySelector('input[name="c_name"]');
+      const error = categoryForm.querySelector('.error');
+
+      categoryForm.addEventListener('submit', (e) => {
+        const value = input.value.trim();
+        const ok = validateCategoryName(value);
+        input.value = value;
+        if (error) error.classList.toggle('is-visible', !ok);
+        if (!ok) e.preventDefault();
+      });
+    });
+
+    document.querySelectorAll('.product-category-form').forEach((categoryForm) => {
+      const choices = Array.from(categoryForm.querySelectorAll('input[name="category_id"]'));
+      const error = categoryForm.querySelector('.error');
+
+      categoryForm.addEventListener('submit', (e) => {
+        const ok = choices.some((choice) => choice.checked);
+        if (error) error.classList.toggle('is-visible', !ok);
+        if (!ok) e.preventDefault();
+      });
+    });
+
     form.addEventListener('submit', (e) => {
       let ok = true;
-      if (nameField.value.trim().length < 2) { setError('p-name', 'Name must be at least 2 characters.'); ok = false; } else clearError('p-name');
-      if (descField.value.trim().length < 4) { setError('p-description', 'Description must be at least 4 characters.'); ok = false; } else clearError('p-description');
-      if (!/^[0-9]+(\.[0-9]+)?$/.test(priceField.value.trim())) { setError('p-price', 'Enter a valid price.'); ok = false; } else clearError('p-price');
-      if (!/^[0-9]+$/.test(stockField.value.trim())) { setError('p-stock', 'Enter a valid stock number.'); ok = false; } else clearError('p-stock');
+      if (nameField.value.trim().length < 2 || nameField.value.trim().length > 150) { setError('p-name', 'Name must be 2 to 150 characters.'); ok = false; } else clearError('p-name');
+      if (descField.value.trim().length < 4 || descField.value.trim().length > 1000) { setError('p-description', 'Description must be 4 to 1000 characters.'); ok = false; } else clearError('p-description');
+      if (!isPositiveNumber(priceField, 999999)) { setError('p-price', 'Enter a price from 0 to 999999.'); ok = false; } else clearError('p-price');
+      if (!isPositiveNumber(stockField, 999999) || !Number.isInteger(Number(stockField.value))) { setError('p-stock', 'Stock must be a whole number from 0 to 999999.'); ok = false; } else clearError('p-stock');
+      if (productCategories && !Array.from(productCategories.querySelectorAll('input[name="category_id"]')).some((choice) => choice.checked)) { setError('p-categories', 'Choose one category.'); ok = false; } else clearError('p-categories');
       if (!ok) e.preventDefault();
     });
 
@@ -413,12 +479,17 @@ if (!function_exists('e')) {
 
     const nav = document.querySelector('.admin-nav');
     const navLinks = Array.from(document.querySelectorAll('.admin-nav .nav-link'));
-    const jumpLinks = Array.from(document.querySelectorAll('.admin-nav .nav-link, .admin-signal'));
+    const jumpLinks = Array.from(document.querySelectorAll('.admin-nav .nav-link[href^="#"], .admin-signal[href^="#"]'));
     const panels = Array.from(document.querySelectorAll('.admin-panel[id]'));
+    const panelIds = panels.map((panel) => panel.id);
 
     function setActivePanel(id, pulse = false) {
-      navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${id}`));
-      const activeLink = navLinks.find((link) => link.getAttribute('href') === `#${id}`);
+      const targetId = panelIds.includes(id) ? id : 'users';
+      navLinks.forEach((link) => link.classList.toggle('active', link.getAttribute('href') === `#${targetId}`));
+      const activeLink = navLinks.find((link) => link.getAttribute('href') === `#${targetId}`);
+      panels.forEach((panel) => {
+        panel.hidden = panel.id !== targetId;
+      });
 
       if (activeLink && nav) {
         nav.style.setProperty('--active-top', `${activeLink.offsetTop}px`);
@@ -426,7 +497,7 @@ if (!function_exists('e')) {
       }
 
       if (pulse) {
-        const panel = document.getElementById(id);
+        const panel = document.getElementById(targetId);
         if (panel) {
           panel.classList.remove('is-current');
           window.requestAnimationFrame(() => panel.classList.add('is-current'));
@@ -443,18 +514,11 @@ if (!function_exists('e')) {
 
         event.preventDefault();
         setActivePanel(id, true);
-        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        document.querySelector('.admin-content').scrollIntoView({ behavior: 'smooth', block: 'start' });
         history.replaceState(null, '', `#${id}`);
       });
     });
 
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) setActivePanel(entry.target.id);
-      });
-    }, { rootMargin: '-28% 0px -58% 0px', threshold: 0.1 });
-
-    panels.forEach((panel) => observer.observe(panel));
     setActivePanel(location.hash ? location.hash.slice(1) : 'users');
     window.addEventListener('resize', () => {
       const active = navLinks.find((link) => link.classList.contains('active'));

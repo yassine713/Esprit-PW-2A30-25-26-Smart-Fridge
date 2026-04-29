@@ -33,7 +33,7 @@ class ExerciseModel
     public function listLogsByUser($userId)
     {
         $db = config::getConnexion();
-        $sql = 'SELECT ue.id, ue.duration_min, ue.date_done, e.name
+        $sql = 'SELECT ue.id, ue.exercise_id, ue.duration_min, ue.date_done, e.name
                 FROM user_exercise ue
                 JOIN exercise e ON e.id = ue.exercise_id
                 WHERE ue.user_id = :uid
@@ -41,6 +41,39 @@ class ExerciseModel
         $stmt = $db->prepare($sql);
         $stmt->execute(['uid' => $userId]);
         return $stmt->fetchAll();
+    }
+
+    public function getExerciseStatsByUser($userId)
+    {
+        $db = config::getConnexion();
+        $sql = 'SELECT e.name,
+                       COUNT(ue.id) AS log_count,
+                       COALESCE(SUM(ue.duration_min), 0) AS total_duration
+                FROM user_exercise ue
+                JOIN exercise e ON e.id = ue.exercise_id
+                WHERE ue.user_id = :uid
+                GROUP BY e.id, e.name
+                ORDER BY log_count DESC, total_duration DESC, e.name ASC';
+        $stmt = $db->prepare($sql);
+        $stmt->execute(['uid' => $userId]);
+        $distribution = $stmt->fetchAll();
+        $favorite = $distribution[0] ?? null;
+
+        $summary = $db->prepare(
+            'SELECT COUNT(id) AS total_logs,
+                    COALESCE(SUM(duration_min), 0) AS total_duration
+             FROM user_exercise
+             WHERE user_id = :uid'
+        );
+        $summary->execute(['uid' => $userId]);
+        $totals = $summary->fetch();
+
+        return [
+            'favorite' => $favorite ?: null,
+            'distribution' => $distribution,
+            'total_logs' => (int) ($totals['total_logs'] ?? 0),
+            'total_duration' => (int) ($totals['total_duration'] ?? 0)
+        ];
     }
 
     public function addLog($userId, $exerciseId, $durationMin, $dateDone)

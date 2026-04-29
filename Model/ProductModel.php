@@ -6,13 +6,30 @@ class ProductModel
     public function listAll()
     {
         $db = config::getConnexion();
-        return $db->query('SELECT * FROM product ORDER BY created_at DESC')->fetchAll();
+        $sql = 'SELECT p.*, c.name AS category_name
+                FROM product p
+                LEFT JOIN category c ON c.id = p.category_id
+                ORDER BY p.created_at DESC';
+        return $db->query($sql)->fetchAll();
+    }
+
+    public function listAllForStore()
+    {
+        $db = config::getConnexion();
+        $sql = 'SELECT p.*, c.id AS category_id, c.name AS category_name
+                FROM product p
+                LEFT JOIN category c ON c.id = p.category_id
+                ORDER BY p.created_at DESC';
+        return $db->query($sql)->fetchAll();
     }
 
     public function listCategories($productId)
     {
         $db = config::getConnexion();
-        $sql = 'SELECT c.id, c.name FROM product_category pc JOIN category c ON c.id = pc.category_id WHERE pc.product_id = :pid';
+        $sql = 'SELECT c.id, c.name
+                FROM product p
+                JOIN category c ON c.id = p.category_id
+                WHERE p.id = :pid';
         $stmt = $db->prepare($sql);
         $stmt->execute(['pid' => $productId]);
         return $stmt->fetchAll();
@@ -20,28 +37,41 @@ class ProductModel
 
     public function setCategories($productId, $categoryIds)
     {
-        $db = config::getConnexion();
-        $db->prepare('DELETE FROM product_category WHERE product_id = :pid')->execute(['pid' => $productId]);
-        $stmt = $db->prepare('INSERT INTO product_category (product_id, category_id) VALUES (:pid, :cid)');
-        foreach ($categoryIds as $cid) {
-            if ($cid === '') {
-                continue;
-            }
-            $stmt->execute(['pid' => $productId, 'cid' => $cid]);
+        if ($productId <= 0) {
+            return;
         }
+
+        $categoryIds = array_values(array_filter(
+            array_map('intval', $categoryIds),
+            fn($cid) => $cid > 0
+        ));
+        $categoryId = $categoryIds[0] ?? null;
+
+        if (!$categoryId || !$this->categoryExists($categoryId)) {
+            return;
+        }
+
+        $db = config::getConnexion();
+        $stmt = $db->prepare('UPDATE product SET category_id = :cid WHERE id = :pid');
+        $stmt->execute(['pid' => $productId, 'cid' => $categoryId]);
     }
 
-    public function add($name, $description, $price, $stock, $imageUrl = null)
+    public function add($name, $description, $price, $stock, $imageUrl = null, $categoryId = null)
     {
         $db = config::getConnexion();
-        $stmt = $db->prepare('INSERT INTO product (name, description, price, stock, image_url, created_at) VALUES (:name, :description, :price, :stock, :image_url, NOW())');
+        $categoryId = (int) $categoryId;
+        $categoryId = $categoryId > 0 && $this->categoryExists($categoryId) ? $categoryId : null;
+        $stmt = $db->prepare('INSERT INTO product (name, description, price, stock, image_url, category_id, created_at) VALUES (:name, :description, :price, :stock, :image_url, :category_id, NOW())');
         $stmt->execute([
             'name' => $name,
             'description' => $description,
             'price' => $price,
             'stock' => $stock,
-            'image_url' => $imageUrl
+            'image_url' => $imageUrl,
+            'category_id' => $categoryId
         ]);
+
+        return (int) $db->lastInsertId();
     }
 
     public function update($id, $name, $description, $price, $stock, $imageUrl = null)
@@ -63,6 +93,14 @@ class ProductModel
         $db = config::getConnexion();
         $stmt = $db->prepare('DELETE FROM product WHERE id=:id');
         $stmt->execute(['id' => $id]);
+    }
+
+    private function categoryExists($categoryId)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare('SELECT id FROM category WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $categoryId]);
+        return (bool) $stmt->fetch();
     }
 }
 ?>

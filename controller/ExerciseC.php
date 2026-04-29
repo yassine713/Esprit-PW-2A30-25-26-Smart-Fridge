@@ -35,6 +35,11 @@ class ExerciseC
         return $this->model->listLogsByUser($userId);
     }
 
+    public function getExerciseStatsByUser($userId)
+    {
+        return $this->model->getExerciseStatsByUser($userId);
+    }
+
     public function addLog($userId, $exerciseId, $durationMin, $dateDone)
     {
         $this->model->addLog($userId, $exerciseId, $durationMin, $dateDone);
@@ -57,17 +62,30 @@ class ExerciseC
 
     public function addObjective($userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
     {
+        if (!$this->isObjectiveTitleValid($title)) {
+            return;
+        }
+
         $this->model->addObjective($userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status);
     }
 
     public function updateObjective($objectiveId, $userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status)
     {
+        if (!$this->isObjectiveTitleValid($title)) {
+            return;
+        }
+
         $this->model->updateObjective($objectiveId, $userId, $exerciseId, $title, $targetDurationMin, $startDate, $endDate, $status);
     }
 
     public function deleteObjective($objectiveId, $userId)
     {
         $this->model->deleteObjective($objectiveId, $userId);
+    }
+
+    private function isObjectiveTitleValid($title)
+    {
+        return preg_match('/^[\p{L} ]{3,}$/u', trim($title)) === 1;
     }
 }
 ?>

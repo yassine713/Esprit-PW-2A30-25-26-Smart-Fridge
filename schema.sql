@@ -110,6 +110,11 @@ CREATE TABLE objective (
   CONSTRAINT fk_objective_exercise FOREIGN KEY (exercise_id) REFERENCES exercise(id) ON DELETE CASCADE
 );
 
+CREATE TABLE category (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL
+);
+
 CREATE TABLE product (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(150) NOT NULL,
@@ -117,20 +122,9 @@ CREATE TABLE product (
   price DECIMAL(8,2) NOT NULL,
   stock INT NOT NULL,
   image_url VARCHAR(255) NULL,
-  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE category (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(150) NOT NULL
-);
-
-CREATE TABLE product_category (
-  product_id INT NOT NULL,
-  category_id INT NOT NULL,
-  PRIMARY KEY (product_id, category_id),
-  CONSTRAINT fk_pc_product FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE CASCADE,
-  CONSTRAINT fk_pc_category FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE CASCADE
+  category_id INT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_product_category FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE SET NULL
 );
 
 INSERT INTO `user` (name, email, password, role)

@@ -77,7 +77,8 @@ class ExercisesPageController
         return [
             'exerciseList' => $exerciseController->listExercises(),
             'logs' => $exerciseController->listLogsByUser($user['id']),
-            'objectives' => $exerciseController->listObjectivesByUser($user['id'])
+            'objectives' => $exerciseController->listObjectivesByUser($user['id']),
+            'exerciseStats' => $exerciseController->getExerciseStatsByUser($user['id'])
         ];
     }
 }
