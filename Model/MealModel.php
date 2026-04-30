@@ -55,7 +55,10 @@ class MealModel
     public function listMealIngredients($mealId)
     {
         $db = config::getConnexion();
-        $sql = 'SELECT mi.id, mi.quantity_g, i.name FROM meal_ingredient mi JOIN ingredient i ON i.id = mi.ingredient_id WHERE mi.meal_id = :mid';
+        $sql = 'SELECT mi.id, mi.quantity_g, i.name, i.protein
+                FROM meal_ingredient mi
+                JOIN ingredient i ON i.id = mi.ingredient_id
+                WHERE mi.meal_id = :mid';
         $stmt = $db->prepare($sql);
         $stmt->execute(['mid' => $mealId]);
         return $stmt->fetchAll();

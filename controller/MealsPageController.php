@@ -9,6 +9,11 @@ class MealsPageController
         $mealController = new MealC();
         $ingredientController = new IngredientC();
 
+        $sort = $_GET['sort'] ?? '';
+        $dir = strtolower($_GET['dir'] ?? 'desc');
+        $dir = $dir === 'asc' ? 'asc' : 'desc';
+        $redirectUrl = $this->buildMealsRedirectUrl($sort, $dir);
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action = $_POST['action'] ?? '';
             if ($action === 'add_meal') {
@@ -34,7 +39,7 @@ class MealsPageController
                     }
                 }
 
-                header('Location: meals.php');
+                header('Location: ' . $redirectUrl);
                 exit;
             }
 
@@ -46,7 +51,7 @@ class MealsPageController
                     $mealController->updateMeal((int) ($_POST['meal_id'] ?? 0), $user['id'], $name, $type);
                 }
 
-                header('Location: meals.php');
+                header('Location: ' . $redirectUrl);
                 exit;
             }
 
@@ -59,13 +64,13 @@ class MealsPageController
                     $mealController->addMealIngredientForUser($mealId, $user['id'], (int) $ingredientId, (float) $quantity);
                 }
 
-                header('Location: meals.php');
+                header('Location: ' . $redirectUrl);
                 exit;
             }
 
             if ($action === 'delete_meal') {
                 $mealController->deleteMeal((int) ($_POST['meal_id'] ?? 0), $user['id']);
-                header('Location: meals.php');
+                header('Location: ' . $redirectUrl);
                 exit;
             }
         }
@@ -73,17 +78,66 @@ class MealsPageController
         $meals = $mealController->listByUser($user['id']);
         $mealIngredientsMap = [];
         $mealCoachMap = [];
+        $mealProteinMap = [];
         foreach ($meals as $meal) {
             $mealIngredientsMap[$meal['id']] = $mealController->listMealIngredients($meal['id']);
             $mealCoachMap[$meal['id']] = $this->buildMealCoach($meal, $mealIngredientsMap[$meal['id']]);
+            $mealProteinMap[$meal['id']] = $this->calculateMealProteinG($mealIngredientsMap[$meal['id']]);
+        }
+
+        if ($sort === 'protein') {
+            usort($meals, function ($a, $b) use ($mealProteinMap, $dir) {
+                $aProt = (float) ($mealProteinMap[$a['id']] ?? 0);
+                $bProt = (float) ($mealProteinMap[$b['id']] ?? 0);
+
+                if ($aProt === $bProt) {
+                    return (int) $b['id'] <=> (int) $a['id'];
+                }
+
+                return $dir === 'asc' ? ($aProt <=> $bProt) : ($bProt <=> $aProt);
+            });
         }
 
         return [
             'ingredients' => $ingredientController->listAll(),
             'meals' => $meals,
             'mealIngredientsMap' => $mealIngredientsMap,
-            'mealCoachMap' => $mealCoachMap
+            'mealCoachMap' => $mealCoachMap,
+            'mealProteinMap' => $mealProteinMap,
+            'sort' => $sort,
+            'dir' => $dir
         ];
+    }
+
+    private function calculateMealProteinG($ingredients)
+    {
+        $total = 0.0;
+        foreach ($ingredients as $ingredient) {
+            $proteinPer100g = (float) ($ingredient['protein'] ?? 0);
+            $quantityG = (float) ($ingredient['quantity_g'] ?? 0);
+            if ($proteinPer100g <= 0 || $quantityG <= 0) {
+                continue;
+            }
+            $total += $proteinPer100g * ($quantityG / 100.0);
+        }
+
+        return round($total, 1);
+    }
+
+    private function buildMealsRedirectUrl($sort, $dir)
+    {
+        $sort = (string) $sort;
+        $dir = strtolower((string) $dir);
+        $dir = $dir === 'asc' ? 'asc' : 'desc';
+
+        if ($sort !== 'protein') {
+            return 'meals.php';
+        }
+
+        return 'meals.php?' . http_build_query([
+            'sort' => 'protein',
+            'dir' => $dir
+        ]);
     }
 
     private function buildMealCoach($meal, $ingredients)

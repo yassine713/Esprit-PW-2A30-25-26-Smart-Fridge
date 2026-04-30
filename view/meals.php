@@ -9,8 +9,15 @@ $mealsPageController = new MealsPageController();
   'ingredients' => $ingredients,
   'meals' => $meals,
   'mealIngredientsMap' => $mealIngredientsMap,
-  'mealCoachMap' => $mealCoachMap
+  'mealCoachMap' => $mealCoachMap,
+  'mealProteinMap' => $mealProteinMap,
+  'sort' => $sort,
+  'dir' => $dir
 ] = $mealsPageController->handle($user);
+
+$isProteinSort = ($sort ?? '') === 'protein';
+$organizeHref = $isProteinSort ? 'meals.php' : 'meals.php?sort=protein&dir=desc';
+$organizeLabel = $isProteinSort ? 'Clear' : 'Organize';
 ?>
 <!doctype html>
 <html lang="en">
@@ -88,10 +95,22 @@ $mealsPageController = new MealsPageController();
           </div>
 
           <div class="card">
-            <h3>My Meals</h3>
+            <div class="meals-card-head">
+              <h3>My Meals</h3>
+              <a class="btn soft tiny with-icon organize-btn" href="<?= htmlspecialchars($organizeHref) ?>" aria-label="Organize meals by protein">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path fill="currentColor" d="M7 4h2v14l1.5-1.5 1.4 1.4L8 22 4.1 17.9l1.4-1.4L7 18V4zm10 2h-6V4h6c1.7 0 3 1.3 3 3v4c0 1.7-1.3 3-3 3h-2v4h-2V8h4c.6 0 1-.4 1-1V7c0-.6-.4-1-1-1zm-2 14h2v2h-2v-2z"/>
+                </svg>
+                <span><?= htmlspecialchars($organizeLabel) ?></span>
+                <span class="organize-pill">Protein</span>
+              </a>
+            </div>
             <?php if (!$meals): ?>
               <p class="muted">No meals yet.</p>
             <?php else: ?>
+              <?php if ($isProteinSort): ?>
+                <p class="muted meals-sort-hint">Organized by protein (high → low).</p>
+              <?php endif; ?>
               <div class="reclamations">
                 <?php foreach ($meals as $meal): ?>
                   <?php $coach = $mealCoachMap[$meal['id']] ?? null; ?>
@@ -110,6 +129,7 @@ $mealsPageController = new MealsPageController();
                         </label>
                         <div class="meta">
                           <span>Meal ID: <?= $meal['id'] ?></span>
+                          <span>Protein: <?= htmlspecialchars(number_format((float) ($mealProteinMap[$meal['id']] ?? 0), 1)) ?> g</span>
                         </div>
                         <?php $ings = $mealIngredientsMap[$meal['id']] ?? []; ?>
                         <?php if ($ings): ?>

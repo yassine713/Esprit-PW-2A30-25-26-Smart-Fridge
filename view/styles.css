@@ -119,6 +119,17 @@ select {
   text-decoration: none;
 }
 
+.btn.with-icon {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.btn.with-icon svg {
+  height: 16px;
+  width: 16px;
+}
+
 .btn.primary {
   background: var(--green);
   color: #fff;
@@ -603,6 +614,33 @@ select {
   padding-left: 18px;
   color: #5e5f57;
   font-size: 13px;
+}
+
+.meals-card-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.organize-btn {
+  white-space: nowrap;
+}
+
+.organize-pill {
+  background: rgba(18, 73, 20, 0.12);
+  border-radius: 999px;
+  color: #124914;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.meals-sort-hint {
+  margin: 0 0 12px;
 }
 
 .meal-builder {
