@@ -113,15 +113,14 @@ function product_image_name($name)
   <div class="app" data-view="dashboard" data-page="store">
     <main class="dashboard">
       <aside class="sidebar">
-        <div class="brand small">
+        <a class="brand small" href="dashboard.php" aria-label="Go to dashboard">
           <div class="brand-mark"></div>
           <div>
             <h1>NutriBudget</h1>
             <p>Smart nutrition on a budget</p>
           </div>
-        </div>
+        </a>
         <nav>
-          <a class="nav-link" href="dashboard.php">Dashboard</a>
           <a class="nav-link" href="meals.php">Meals</a>
           <a class="nav-link" href="exercises.php">Exercises</a>
           <a class="nav-link active" href="store.php">Store</a>
