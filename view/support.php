@@ -31,7 +31,7 @@ $typePalette = [
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" data-view="dashboard">
+  <div class="app" data-view="dashboard" data-page="support">
     <main class="dashboard">
       <aside class="sidebar">
         <div class="brand small">
@@ -48,17 +48,23 @@ $typePalette = [
           <a class="nav-link" href="store.php">Store</a>
           <a class="nav-link" href="profile.php">Profile</a>
           <a class="nav-link active" href="support.php">Support</a>
-          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php if (($user['role'] ?? 'user') === 'admin'): ?>
+            <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php endif; ?>
         </nav>
       </aside>
 
       <section class="content">
         <header class="page-head">
-          <div>
-            <h2>Support & Help</h2>
-            <p>Get help or report an issue</p>
+          <div class="page-head-copy">
+            <span class="page-kicker">Help desk</span>
+            <h2>Get answers without losing momentum.</h2>
+            <p>Send requests, track replies, and keep support conversations connected to your goals.</p>
           </div>
-          <a class="btn ghost" href="logout.php">Log out</a>
+          <div class="page-head-actions">
+            <a class="btn ghost" href="#support-form">New request</a>
+            <a class="btn ghost" href="logout.php">Log out</a>
+          </div>
         </header>
 
         <div class="support-page">
@@ -150,18 +156,18 @@ $typePalette = [
 
               <div class="card faq">
                 <h3>Frequently Asked Questions</h3>
-                <div class="faq-item">
-                  <h4>How do I track my daily calories?</h4>
+                <details class="faq-item" open>
+                  <summary>How do I track my daily calories?</summary>
                   <p>Navigate to the Dashboard and use the Add Custom Meal feature to input your meals.</p>
-                </div>
-                <div class="faq-item">
-                  <h4>Can I change my budget later?</h4>
+                </details>
+                <details class="faq-item">
+                  <summary>Can I change my budget later?</summary>
                   <p>Yes. Update your budget anytime from the Profile page.</p>
-                </div>
-                <div class="faq-item">
-                  <h4>How does the AI meal generator work?</h4>
+                </details>
+                <details class="faq-item">
+                  <summary>How does the AI meal generator work?</summary>
                   <p>Enter your ingredients and the AI suggests budget-friendly meals that match your goals.</p>
-                </div>
+                </details>
               </div>
             </div>
 
@@ -234,6 +240,7 @@ $typePalette = [
             </div>
           </div>
         </div>
+        <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
   </div>
@@ -270,5 +277,6 @@ $typePalette = [
       if (!ok) e.preventDefault();
     });
   </script>
+  <script src="user-panel.js"></script>
 </body>
 </html>

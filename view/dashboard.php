@@ -1,14 +1,6 @@
 <?php
 require_once __DIR__ . '/../controller/auth.php';
-require_once __DIR__ . '/../controller/DashboardController.php';
 require_login();
-
-$user = $_SESSION['user'];
-$dashboardController = new DashboardController();
-[
-  'meals' => $meals,
-  'requests' => $requests
-] = $dashboardController->load($user);
 ?>
 <!doctype html>
 <html lang="en">
@@ -19,63 +11,46 @@ $dashboardController = new DashboardController();
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" data-view="dashboard">
-    <main class="dashboard">
-      <aside class="sidebar">
-        <div class="brand small">
-          <div class="brand-mark"></div>
-          <div>
-            <h1>NutriBudget</h1>
-            <p>Smart nutrition on a budget</p>
-          </div>
-        </div>
-        <nav>
-          <a class="nav-link active" href="dashboard.php">Dashboard</a>
-          <a class="nav-link" href="meals.php">Meals</a>
-          <a class="nav-link" href="exercises.php">Exercises</a>
-          <a class="nav-link" href="store.php">Store</a>
-          <a class="nav-link" href="profile.php">Profile</a>
-          <a class="nav-link" href="support.php">Support</a>
-          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
-        </nav>
-      </aside>
-
-      <section class="content">
-        <header class="page-head">
-          <div>
-            <h2>Dashboard</h2>
-            <p>Welcome back, <?= htmlspecialchars($user['name']) ?>.</p>
-          </div>
-          <a class="btn ghost" href="logout.php">Log out</a>
+  <div class="app" data-view="dashboard" data-page="home">
+    <main class="template-dashboard">
+      <section class="template-hero" aria-label="NutriBudget home">
+        <img class="template-hero-media" src="assets/Home_Screen.gif" alt="NutriBudget animated fitness preview" />
+        <div class="template-hero-shade"></div>
+        <header class="template-hero-nav">
+          <a class="template-logo" href="dashboard.php" aria-label="NutriBudget dashboard">
+            <span>nutribudget</span>
+            <i></i><i></i><i></i>
+          </a>
+          <nav class="template-links" aria-label="Primary user navigation">
+            <a href="meals.php">Meals</a>
+            <a href="exercises.php">Exercice</a>
+            <a href="store.php">Store</a>
+            <a href="support.php">Support</a>
+          </nav>
+          <a class="template-cta" href="profile.php">Build your profil <span aria-hidden="true">&rarr;</span></a>
         </header>
-        <?php if ($notice = access_notice()): ?>
-          <div class="access-alert"><?= htmlspecialchars($notice) ?></div>
-        <?php endif; ?>
-
-        <div class="stats">
-          <div class="stat">
-            <p>Custom Meals</p>
-            <h3><?= count($meals) ?></h3>
-            <span>Total saved meals</span>
-          </div>
-          <div class="stat">
-            <p>Support Requests</p>
-            <h3><?= count($requests) ?></h3>
-            <span>Requests submitted</span>
-          </div>
-          <div class="stat">
-            <p>Role</p>
-            <h3><?= htmlspecialchars($user['role']) ?></h3>
-            <span>Access level</span>
-          </div>
-          <div class="stat">
-            <p>Account Email</p>
-            <h3><?= htmlspecialchars($user['email']) ?></h3>
-            <span>Signed in</span>
-          </div>
+        <div class="template-hero-copy">
+          <h2>
+            <span>From</span>
+            <em>1 Dinar</em>
+            <span>to your dream Body</span>
+          </h2>
         </div>
+        <aside class="template-hero-note">
+          <a class="template-logout" href="logout.php" aria-label="Log out">
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+              </svg>
+            </span>
+            Log out
+          </a>
+        </aside>
       </section>
     </main>
   </div>
+  <script src="user-panel.js"></script>
 </body>
 </html>

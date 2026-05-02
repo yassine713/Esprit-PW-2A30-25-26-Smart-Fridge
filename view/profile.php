@@ -6,6 +6,14 @@ require_login();
 $user = $_SESSION['user'];
 $profilePageController = new ProfilePageController();
 ['profile' => $profile] = $profilePageController->handle($user);
+$profile = $profile ?: [];
+$heightCm = (float) ($profile['height'] ?? 0);
+$weightKg = (float) ($profile['weight'] ?? 0);
+$heightM = $heightCm > 0 ? $heightCm / 100 : 0;
+$bmi = ($heightM > 0 && $weightKg > 0) ? round($weightKg / ($heightM * $heightM), 1) : null;
+$profileFields = ['height', 'weight', 'goal', 'budget', 'disease', 'allergy'];
+$filledProfileFields = count(array_filter($profileFields, fn($field) => trim((string) ($profile[$field] ?? '')) !== ''));
+$profileCompletion = (int) round(($filledProfileFields / count($profileFields)) * 100);
 ?>
 <!doctype html>
 <html lang="en">
@@ -16,7 +24,7 @@ $profilePageController = new ProfilePageController();
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" data-view="dashboard">
+  <div class="app" data-view="dashboard" data-page="profile">
     <main class="dashboard">
       <aside class="sidebar">
         <div class="brand small">
@@ -33,18 +41,42 @@ $profilePageController = new ProfilePageController();
           <a class="nav-link" href="store.php">Store</a>
           <a class="nav-link active" href="profile.php">Profile</a>
           <a class="nav-link" href="support.php">Support</a>
-          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php if (($user['role'] ?? 'user') === 'admin'): ?>
+            <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php endif; ?>
         </nav>
       </aside>
 
       <section class="content">
         <header class="page-head">
-          <div>
-            <h2>Profile Settings</h2>
-            <p>Manage your personal information and preferences</p>
+          <div class="page-head-copy">
+            <span class="page-kicker">Body profile</span>
+            <h2>Personalize every recommendation.</h2>
+            <p>Keep your goals, budget, and health notes current so the app feels built around you.</p>
           </div>
-          <a class="btn ghost" href="logout.php">Log out</a>
+          <div class="page-head-actions">
+            <a class="btn ghost" href="support.php">Need help?</a>
+            <a class="btn ghost" href="logout.php">Log out</a>
+          </div>
         </header>
+
+        <div class="insight-row profile-insights" aria-label="Profile overview">
+          <div class="insight-card">
+            <span>Profile ready</span>
+            <strong><?= $profileCompletion ?>%</strong>
+            <small><?= $filledProfileFields ?> of <?= count($profileFields) ?> fields filled</small>
+          </div>
+          <div class="insight-card">
+            <span>BMI</span>
+            <strong><?= $bmi !== null ? htmlspecialchars(number_format((float) $bmi, 1)) : '--' ?></strong>
+            <small><?= $bmi !== null ? 'Based on height and weight' : 'Add height and weight' ?></small>
+          </div>
+          <div class="insight-card">
+            <span>Budget</span>
+            <strong><?= trim((string) ($profile['budget'] ?? '')) !== '' ? '$' . htmlspecialchars($profile['budget']) : '--' ?></strong>
+            <small>Monthly food target</small>
+          </div>
+        </div>
 
         <form method="post" id="profile-form" class="stack" novalidate>
           <div class="card profile-card">
@@ -101,6 +133,7 @@ $profilePageController = new ProfilePageController();
 
           <button class="btn primary" type="submit">Save Changes</button>
         </form>
+        <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
   </div>
@@ -131,5 +164,6 @@ $profilePageController = new ProfilePageController();
       if (!ok) e.preventDefault();
     });
   </script>
+  <script src="user-panel.js"></script>
 </body>
 </html>

@@ -38,7 +38,7 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" data-view="dashboard">
+  <div class="app" data-view="dashboard" data-page="exercises">
     <main class="dashboard">
       <aside class="sidebar">
         <div class="brand small">
@@ -55,18 +55,42 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
           <a class="nav-link" href="store.php">Store</a>
           <a class="nav-link" href="profile.php">Profile</a>
           <a class="nav-link" href="support.php">Support</a>
-          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php if (($user['role'] ?? 'user') === 'admin'): ?>
+            <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php endif; ?>
         </nav>
       </aside>
 
       <section class="content">
         <header class="page-head">
-          <div>
-            <h2>Exercises</h2>
-            <p>Track your workouts and activity</p>
+          <div class="page-head-copy">
+            <span class="page-kicker">Training studio</span>
+            <h2>Track workouts without breaking rhythm.</h2>
+            <p>Log movement, watch your exercise mix, and turn objectives into visible progress.</p>
           </div>
-          <a class="btn ghost" href="logout.php">Log out</a>
+          <div class="page-head-actions">
+            <a class="btn ghost" href="#exercise-form">Log session</a>
+            <a class="btn ghost" href="logout.php">Log out</a>
+          </div>
         </header>
+
+        <div class="insight-row exercise-insights" aria-label="Exercise overview">
+          <div class="insight-card">
+            <span>Total minutes</span>
+            <strong><?= $totalExerciseMinutes ?></strong>
+            <small>Across all logs</small>
+          </div>
+          <div class="insight-card">
+            <span>Sessions</span>
+            <strong><?= $totalExerciseLogs ?></strong>
+            <small>Workout logs saved</small>
+          </div>
+          <div class="insight-card">
+            <span>Objectives</span>
+            <strong><?= count($objectives) ?></strong>
+            <small><?= $favoriteExercise ? htmlspecialchars($favoriteExercise['name']) : 'Add your first goal' ?></small>
+          </div>
+        </div>
 
         <div class="exercise-page">
           <section class="exercise-smart-card" aria-label="Smart exercise statistic">
@@ -290,6 +314,7 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
             </div>
           </div>
         </div>
+        <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
   </div>
@@ -347,5 +372,6 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
       });
     });
   </script>
+  <script src="user-panel.js"></script>
 </body>
 </html>

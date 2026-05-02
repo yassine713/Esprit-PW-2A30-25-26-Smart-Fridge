@@ -110,7 +110,7 @@ function product_image_name($name)
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app" data-view="dashboard">
+  <div class="app" data-view="dashboard" data-page="store">
     <main class="dashboard">
       <aside class="sidebar">
         <div class="brand small">
@@ -127,18 +127,42 @@ function product_image_name($name)
           <a class="nav-link active" href="store.php">Store</a>
           <a class="nav-link" href="profile.php">Profile</a>
           <a class="nav-link" href="support.php">Support</a>
-          <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php if (($user['role'] ?? 'user') === 'admin'): ?>
+            <a class="nav-link portal-link" href="access.php?target=admin"><span class="nav-icon">AP</span>Admin Panel</a>
+          <?php endif; ?>
         </nav>
       </aside>
 
       <section class="content">
         <header class="page-head">
-          <div>
-            <h2>Store</h2>
-            <p>See what's available today</p>
+          <div class="page-head-copy">
+            <span class="page-kicker">Smart store</span>
+            <h2>Shop ingredients around your goals.</h2>
+            <p>Filter products, build a quick cart, and keep your meal planning tied to real stock.</p>
           </div>
-          <a class="btn ghost" href="logout.php">Log out</a>
+          <div class="page-head-actions">
+            <a class="btn ghost" href="#cart">View cart</a>
+            <a class="btn ghost" href="logout.php">Log out</a>
+          </div>
         </header>
+
+        <div class="insight-row store-insights" aria-label="Store overview">
+          <div class="insight-card">
+            <span>Products</span>
+            <strong><?= count($products) ?></strong>
+            <small>Available today</small>
+          </div>
+          <div class="insight-card">
+            <span>Categories</span>
+            <strong><?= count($categories) ?></strong>
+            <small>Ways to filter</small>
+          </div>
+          <div class="insight-card">
+            <span>Cart</span>
+            <strong id="cart-insight-count">0</strong>
+            <small>Items selected</small>
+          </div>
+        </div>
 
         <div class="store-layout">
           <section class="card store-main-card">
@@ -147,11 +171,17 @@ function product_image_name($name)
                 <h3>Available products</h3>
                 <p class="muted">Filter by category and add items to your shopping cart.</p>
               </div>
-              <div class="store-filters" aria-label="Product category filters">
-                <button class="filter-chip active" type="button" data-filter="all">All</button>
-                <?php foreach ($categories as $category): ?>
-                  <button class="filter-chip" type="button" data-filter="<?= e($category['id']) ?>"><?= e($category['name']) ?></button>
-                <?php endforeach; ?>
+              <div class="store-tools">
+                <label class="store-search">
+                  <span>Search products</span>
+                  <input id="product-search" type="search" placeholder="Search ingredients, protein, snacks..." />
+                </label>
+                <div class="store-filters" aria-label="Product category filters">
+                  <button class="filter-chip active" type="button" data-filter="all">All</button>
+                  <?php foreach ($categories as $category): ?>
+                    <button class="filter-chip" type="button" data-filter="<?= e($category['id']) ?>"><?= e($category['name']) ?></button>
+                  <?php endforeach; ?>
+                </div>
               </div>
             </div>
 
@@ -166,6 +196,7 @@ function product_image_name($name)
                     data-product-id="<?= e($p['id']) ?>"
                     data-category-id="<?= e($p['category_id'] ?? '') ?>"
                     data-name="<?= e($p['name']) ?>"
+                    data-description="<?= e($p['description']) ?>"
                     data-price="<?= e($p['price']) ?>"
                     data-stock="<?= e($p['stock']) ?>"
                   >
@@ -194,7 +225,7 @@ function product_image_name($name)
           </section>
 
           <aside class="store-side">
-            <section class="card cart-card">
+            <section class="card cart-card" id="cart">
               <div class="store-card-head">
                 <h3>Shopping cart</h3>
                 <span id="cart-count">0 items</span>
@@ -231,6 +262,7 @@ function product_image_name($name)
             </section>
           </aside>
         </div>
+        <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
   </div>
@@ -238,10 +270,12 @@ function product_image_name($name)
   <script>
     const filterButtons = Array.from(document.querySelectorAll('.filter-chip'));
     const productCards = Array.from(document.querySelectorAll('.product-card'));
+    const productSearch = document.getElementById('product-search');
     const emptyFilter = document.getElementById('empty-filter');
     const cartList = document.getElementById('cart-list');
     const cartTotal = document.getElementById('cart-total');
     const cartCount = document.getElementById('cart-count');
+    const cartInsightCount = document.getElementById('cart-insight-count');
     const clearCart = document.getElementById('clear-cart');
     const reviewForm = document.getElementById('review-form');
     const reviewName = document.getElementById('review-name');
@@ -255,11 +289,18 @@ function product_image_name($name)
     let cart = [];
     let reviews = [];
     let selectedRating = 0;
+    let activeFilter = 'all';
 
     try {
       reviews = JSON.parse(localStorage.getItem('nutribudgetReviews') || '[]');
     } catch (error) {
       reviews = [];
+    }
+
+    try {
+      cart = JSON.parse(localStorage.getItem('nutribudgetCart') || '[]');
+    } catch (error) {
+      cart = [];
     }
 
     function money(value) {
@@ -290,7 +331,9 @@ function product_image_name($name)
       const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
       const total = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
       cartCount.textContent = `${totalItems} ${totalItems === 1 ? 'item' : 'items'}`;
+      if (cartInsightCount) cartInsightCount.textContent = totalItems;
       cartTotal.textContent = money(total);
+      localStorage.setItem('nutribudgetCart', JSON.stringify(cart));
 
       if (!cart.length) {
         cartList.innerHTML = '<p class="muted">Your cart is empty.</p>';
@@ -346,23 +389,33 @@ function product_image_name($name)
       renderCart();
     });
 
+    function applyProductFilters() {
+      const query = productSearch.value.trim().toLowerCase();
+      let visibleCount = 0;
+
+      productCards.forEach((card) => {
+        const categoryId = String(card.dataset.categoryId || '');
+        const searchable = `${card.dataset.name || ''} ${card.dataset.description || ''}`.toLowerCase();
+        const matchesCategory = activeFilter === 'all' || categoryId === String(activeFilter);
+        const matchesSearch = query === '' || searchable.includes(query);
+        const show = matchesCategory && matchesSearch;
+        card.hidden = !show;
+        if (show) visibleCount += 1;
+      });
+
+      emptyFilter.textContent = visibleCount ? '' : 'No products match your filters.';
+      emptyFilter.hidden = visibleCount > 0;
+    }
+
     filterButtons.forEach((button) => {
       button.addEventListener('click', () => {
-        const filter = button.dataset.filter;
+        activeFilter = button.dataset.filter;
         filterButtons.forEach((item) => item.classList.toggle('active', item === button));
-        let visibleCount = 0;
-
-        productCards.forEach((card) => {
-          const categoryId = String(card.dataset.categoryId || '');
-          const show = filter === 'all' || categoryId === String(filter);
-          card.hidden = !show;
-          if (show) visibleCount += 1;
-        });
-
-        emptyFilter.textContent = visibleCount ? '' : 'No products found in this category.';
-        emptyFilter.hidden = visibleCount > 0;
+        applyProductFilters();
       });
     });
+
+    productSearch.addEventListener('input', applyProductFilters);
 
     function stars(rating) {
       const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
@@ -435,6 +488,8 @@ function product_image_name($name)
 
     renderCart();
     renderReviews();
+    applyProductFilters();
   </script>
+  <script src="user-panel.js"></script>
 </body>
 </html>

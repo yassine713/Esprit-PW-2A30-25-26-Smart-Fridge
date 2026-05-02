@@ -3,6 +3,10 @@ if (!defined('YOUTUBE_API_KEY')) {
     define('YOUTUBE_API_KEY', 'AIzaSyBmM-G8JUZZnRVWmgET6Ed0IXnXSrki8YQ');
 }
 
+if (!defined('GEMINI_API_KEY')) {
+    define('GEMINI_API_KEY', 'AIzaSyDNXj6xRrANb0rxhNVwA37VwFKdFJXbC-g');
+}
+
 class config
 {
     private static $pdo = null;
