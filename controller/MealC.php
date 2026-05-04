@@ -27,7 +27,12 @@ class MealC
 
     public function deleteMeal($mealId, $userId)
     {
-        $this->model->deleteMeal($mealId, $userId);
+        return $this->model->deleteMeal($mealId, $userId);
+    }
+
+    public function deleteMeals($mealIds, $userId)
+    {
+        return $this->model->deleteMeals($mealIds, $userId);
     }
 
     public function addMealIngredient($mealId, $ingredientId, $quantity)

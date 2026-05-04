@@ -36,12 +36,8 @@ if (!function_exists('app_load_env')) {
                 }
             }
 
-            if (getenv($key) === false) {
-                putenv($key . '=' . $value);
-            }
-
-            $envValue = getenv($key);
-            $_ENV[$key] = $envValue === false ? $value : $envValue;
+            putenv($key . '=' . $value);
+            $_ENV[$key] = $value;
             $_SERVER[$key] = $_ENV[$key];
         }
     }
@@ -63,6 +59,10 @@ if (!defined('YOUTUBE_API_KEY')) {
 
 if (!defined('GEMINI_API_KEY')) {
     define('GEMINI_API_KEY', app_env('GEMINI_API_KEY'));
+}
+
+if (!defined('GEMINI_MODELS')) {
+    define('GEMINI_MODELS', app_env('GEMINI_MODELS', 'gemini-2.5-flash,gemini-flash-latest,gemini-flash-lite-latest'));
 }
 
 class config

@@ -288,7 +288,7 @@ function meal_placeholder_image_url($meal)
   <title>NutriBudget | Meals</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body<?= $aiMealSuggestions ? ' class="has-ai-results"' : '' ?>>
   <div class="app" data-view="dashboard" data-page="meals">
     <main class="dashboard">
       <aside class="sidebar">
@@ -492,9 +492,17 @@ function meal_placeholder_image_url($meal)
         <?php endif; ?>
 
         <?php if ($aiMealSuggestions): ?>
-          <section class="ai-results-panel" aria-label="Generated meals">
-            <div class="ai-generated-grid">
-              <?php foreach ($aiMealSuggestions as $suggestion): ?>
+          <section class="ai-results-overlay" id="ai-results-overlay" role="dialog" aria-modal="true" aria-labelledby="ai-results-title">
+            <div class="ai-results-shell">
+              <header class="ai-results-header">
+                <div>
+                  <span>Generated meals</span>
+                  <h3 id="ai-results-title">Pick your meal card</h3>
+                </div>
+                <button class="ai-overlay-close" type="button" data-ai-close aria-label="Close generated meals">X</button>
+              </header>
+              <div class="ai-generated-grid">
+              <?php foreach ($aiMealSuggestions as $cardIndex => $suggestion): ?>
                 <?php
                   $suggestionMeal = ['name' => $suggestion['name'], 'id' => crc32($suggestion['name'])];
                   $suggestionImage = meal_image_url($suggestionMeal, $suggestion['ingredients']);
@@ -502,6 +510,7 @@ function meal_placeholder_image_url($meal)
                   $suggestionMacros = $suggestion['macros'];
                 ?>
                 <article class="ai-result-card">
+                  <span class="ai-card-index"><?= e(str_pad((string) ($cardIndex + 1), 2, '0', STR_PAD_LEFT)) ?></span>
                   <div class="ai-result-image generated-meal-art">
                     <img src="<?= e($suggestionImage) ?>" alt="<?= e($suggestion['name']) ?>" loading="lazy" decoding="async" width="640" height="360" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($suggestionPlaceholder) ?>';" />
                   </div>
@@ -534,6 +543,7 @@ function meal_placeholder_image_url($meal)
                   </div>
                 </article>
               <?php endforeach; ?>
+              </div>
             </div>
           </section>
         <?php endif; ?>
@@ -545,6 +555,18 @@ function meal_placeholder_image_url($meal)
               <p>Your saved meals with cooking videos and details.</p>
             </div>
             <div class="meal-widget-actions">
+              <?php if ($meals): ?>
+                <label class="meal-select-all">
+                  <input type="checkbox" id="select-all-meals" />
+                  <span>Select all</span>
+                </label>
+                <form method="post" id="bulk-meal-delete-form" class="bulk-meal-delete-form">
+                  <input type="hidden" name="action" value="delete_selected_meals" />
+                  <button class="btn soft tiny bulk-delete-btn" type="submit" disabled>
+                    Delete selected <span id="selected-meal-count">0</span>
+                  </button>
+                </form>
+              <?php endif; ?>
               <a class="btn soft tiny with-icon organize-btn" href="<?= e($organizeHref) ?>" aria-label="Organize meals by protein">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path fill="currentColor" d="M7 4h2v14l1.5-1.5 1.4 1.4L8 22 4.1 17.9l1.4-1.4L7 18V4zm10 2h-6V4h6c1.7 0 3 1.3 3 3v4c0 1.7-1.3 3-3 3h-2v4h-2V8h4c.6 0 1-.4 1-1V7c0-.6-.4-1-1-1zm-2 14h2v2h-2v-2z"/>
@@ -574,6 +596,10 @@ function meal_placeholder_image_url($meal)
                 ?>
                 <article class="meal-row<?= ($coach && $coach['video']) ? ' has-video' : ' no-video' ?>">
                   <div class="meal-row-summary">
+                    <label class="meal-select-control" aria-label="Select <?= e($meal['name']) ?>">
+                      <input type="checkbox" name="meal_ids[]" value="<?= e($meal['id']) ?>" form="bulk-meal-delete-form" class="meal-select-checkbox" />
+                      <span></span>
+                    </label>
                     <div class="meal-thumb generated-meal-art">
                       <img src="<?= e($mealImageUrl) ?>" alt="<?= e($meal['name']) ?>" loading="lazy" decoding="async" width="640" height="360" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($mealPlaceholderUrl) ?>';" />
                     </div>
@@ -650,6 +676,14 @@ function meal_placeholder_image_url($meal)
         <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
+  </div>
+
+  <div class="ai-loading-overlay" id="ai-loading-overlay" hidden aria-live="polite" aria-label="Generating meal cards">
+    <div class="ai-loading-panel">
+      <span>Gemini</span>
+      <strong>Generating meal cards</strong>
+      <div class="ai-loading-track" aria-hidden="true"><i></i></div>
+    </div>
   </div>
 
   <script>
@@ -800,6 +834,54 @@ function meal_placeholder_image_url($meal)
       });
     });
 
+    const bulkMealDeleteForm = document.getElementById('bulk-meal-delete-form');
+    const selectAllMeals = document.getElementById('select-all-meals');
+    const selectedMealCount = document.getElementById('selected-meal-count');
+    const bulkDeleteButton = document.querySelector('.bulk-delete-btn');
+    const mealSelectCheckboxes = Array.from(document.querySelectorAll('.meal-select-checkbox'));
+    if (bulkMealDeleteForm && mealSelectCheckboxes.length) {
+      const syncBulkMealControls = () => {
+        const checkedCount = mealSelectCheckboxes.filter((checkbox) => checkbox.checked).length;
+        if (selectedMealCount) {
+          selectedMealCount.textContent = String(checkedCount);
+        }
+        if (bulkDeleteButton) {
+          bulkDeleteButton.disabled = checkedCount === 0;
+        }
+        if (selectAllMeals) {
+          selectAllMeals.checked = checkedCount === mealSelectCheckboxes.length;
+          selectAllMeals.indeterminate = checkedCount > 0 && checkedCount < mealSelectCheckboxes.length;
+        }
+      };
+
+      mealSelectCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener('change', syncBulkMealControls);
+      });
+
+      if (selectAllMeals) {
+        selectAllMeals.addEventListener('change', () => {
+          mealSelectCheckboxes.forEach((checkbox) => {
+            checkbox.checked = selectAllMeals.checked;
+          });
+          syncBulkMealControls();
+        });
+      }
+
+      bulkMealDeleteForm.addEventListener('submit', (event) => {
+        const checkedCount = mealSelectCheckboxes.filter((checkbox) => checkbox.checked).length;
+        if (checkedCount === 0) {
+          event.preventDefault();
+          return;
+        }
+
+        if (!window.confirm(`Delete ${checkedCount} selected meal${checkedCount === 1 ? '' : 's'} from the database?`)) {
+          event.preventDefault();
+        }
+      });
+
+      syncBulkMealControls();
+    }
+
     const aiBudgetRange = document.getElementById('ai-budget-range');
     const aiBudgetOutput = document.getElementById('ai-budget-output');
     if (aiBudgetRange && aiBudgetOutput) {
@@ -808,6 +890,50 @@ function meal_placeholder_image_url($meal)
       };
       aiBudgetRange.addEventListener('input', syncAiBudget);
       syncAiBudget();
+    }
+
+    const aiGeneratorForm = document.querySelector('.ai-generator-form');
+    const aiLoadingOverlay = document.getElementById('ai-loading-overlay');
+    if (aiGeneratorForm && aiLoadingOverlay) {
+      const resetAiLoading = () => {
+        document.body.classList.remove('is-ai-generating');
+        aiLoadingOverlay.hidden = true;
+        const button = aiGeneratorForm.querySelector('.ai-generate-btn');
+        if (button) {
+          button.disabled = false;
+          button.textContent = 'Generate Meal';
+        }
+      };
+
+      aiGeneratorForm.addEventListener('submit', () => {
+        const button = aiGeneratorForm.querySelector('.ai-generate-btn');
+        aiLoadingOverlay.hidden = false;
+        document.body.classList.add('is-ai-generating');
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Generating...';
+        }
+      });
+
+      window.addEventListener('pageshow', resetAiLoading);
+    }
+
+    const aiResultsOverlay = document.getElementById('ai-results-overlay');
+    if (aiResultsOverlay) {
+      const closeAiResults = () => {
+        document.body.classList.remove('has-ai-results');
+        aiResultsOverlay.hidden = true;
+      };
+
+      aiResultsOverlay.querySelectorAll('[data-ai-close]').forEach((button) => {
+        button.addEventListener('click', closeAiResults);
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !aiResultsOverlay.hidden) {
+          closeAiResults();
+        }
+      });
     }
   </script>
   <script src="user-panel.js"></script>

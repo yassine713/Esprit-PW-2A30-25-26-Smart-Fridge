@@ -29,7 +29,7 @@ class MealsPageController
             'max_budget' => $profileBudget
         ];
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $action = $_POST['action'] ?? '';
             if ($action === 'add_meal') {
                 $name = trim($_POST['meal_name'] ?? '');
@@ -61,8 +61,9 @@ class MealsPageController
             if ($action === 'generate_ai_meals') {
                 $aiForm = $this->readAiGeneratorForm($profileBudget);
                 $result = $this->generateAiMealSuggestions($availableIngredients, $profile, $aiForm);
-                $aiMealSuggestions = $result['suggestions'];
-                $aiMealError = $result['error'];
+                $this->storeAiMealState((int) $user['id'], $aiForm, $result['suggestions'], $result['error']);
+                header('Location: ' . $redirectUrl);
+                exit;
             }
 
             if ($action === 'add_ai_meal') {
@@ -88,6 +89,7 @@ class MealsPageController
                     }
                 }
 
+                $this->clearAiMealState((int) $user['id']);
                 header('Location: ' . $redirectUrl);
                 exit;
             }
@@ -122,6 +124,24 @@ class MealsPageController
                 header('Location: ' . $redirectUrl);
                 exit;
             }
+
+            if ($action === 'delete_selected_meals') {
+                $mealIds = $_POST['meal_ids'] ?? [];
+                if (!is_array($mealIds)) {
+                    $mealIds = [$mealIds];
+                }
+
+                $mealController->deleteMeals($mealIds, $user['id']);
+                header('Location: ' . $redirectUrl);
+                exit;
+            }
+        }
+
+        $storedAiState = $this->readAiMealState((int) $user['id']);
+        if ($storedAiState !== null) {
+            $aiForm = array_merge($aiForm, $storedAiState['form']);
+            $aiMealSuggestions = $storedAiState['suggestions'];
+            $aiMealError = $storedAiState['error'];
         }
 
         $meals = $mealController->listByUser($user['id']);
@@ -217,6 +237,93 @@ class MealsPageController
         ];
     }
 
+    private function getAiMealSessionKey($userId)
+    {
+        return 'nutribudget_ai_meals_' . (int) $userId;
+    }
+
+    private function readAiMealState($userId)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return null;
+        }
+
+        $state = $_SESSION[$this->getAiMealSessionKey($userId)] ?? null;
+        if (!is_array($state)) {
+            return null;
+        }
+
+        $createdAt = (int) ($state['created_at'] ?? 0);
+        if ($createdAt > 0 && ($createdAt + 3600) < time()) {
+            unset($_SESSION[$this->getAiMealSessionKey($userId)]);
+            return null;
+        }
+
+        $result = [
+            'form' => is_array($state['form'] ?? null) ? $state['form'] : [],
+            'suggestions' => $this->addAiSuggestionKeys($state['suggestions'] ?? []),
+            'error' => (string) ($state['error'] ?? '')
+        ];
+
+        unset($_SESSION[$this->getAiMealSessionKey($userId)]);
+        return $result;
+    }
+
+    private function storeAiMealState($userId, $aiForm, $suggestions, $error)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
+        $_SESSION[$this->getAiMealSessionKey($userId)] = [
+            'form' => $aiForm,
+            'suggestions' => $this->addAiSuggestionKeys($suggestions),
+            'error' => (string) $error,
+            'created_at' => time()
+        ];
+    }
+
+    private function clearAiMealState($userId)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
+        unset($_SESSION[$this->getAiMealSessionKey($userId)]);
+    }
+
+    private function addAiSuggestionKeys($suggestions)
+    {
+        $keyed = [];
+        foreach ((array) $suggestions as $suggestion) {
+            if (!is_array($suggestion)) {
+                continue;
+            }
+
+            $suggestion['key'] = $suggestion['key'] ?? $this->buildAiSuggestionKey($suggestion);
+            $keyed[] = $suggestion;
+        }
+
+        return $keyed;
+    }
+
+    private function buildAiSuggestionKey($suggestion)
+    {
+        $ingredients = [];
+        foreach (($suggestion['ingredients'] ?? []) as $ingredient) {
+            $ingredients[] = [
+                'id' => (int) ($ingredient['id'] ?? 0),
+                'quantity_g' => round((float) ($ingredient['quantity_g'] ?? 0), 2)
+            ];
+        }
+
+        return sha1(json_encode([
+            'name' => trim((string) ($suggestion['name'] ?? '')),
+            'type' => trim((string) ($suggestion['type'] ?? '')),
+            'ingredients' => $ingredients
+        ]));
+    }
+
     private function callGeminiForMeals($ingredients, $profile, $aiForm, &$error)
     {
         $apiKey = defined('GEMINI_API_KEY') && GEMINI_API_KEY !== ''
@@ -300,29 +407,76 @@ class MealsPageController
             ]
         ]);
 
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-        $response = $this->postJson($url, $body, [
-            'Content-Type: application/json',
-            'x-goog-api-key: ' . $apiKey
-        ], $status);
+        $lastMessage = 'Gemini could not generate meals right now.';
+        foreach ($this->getGeminiModels() as $model) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
+            $transportError = '';
+            $response = $this->postJson($url, $body, [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $apiKey
+            ], $status, $transportError);
 
-        if ($response === '' || $status < 200 || $status >= 300) {
+            if ($response !== '' && $status >= 200 && $status < 300) {
+                $data = json_decode($response, true);
+                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                if ($text === '') {
+                    $error = 'Gemini returned an empty response.';
+                }
+
+                return $text;
+            }
+
             $message = 'Gemini could not generate meals right now.';
             $data = json_decode($response, true);
             if (isset($data['error']['message'])) {
                 $message = $data['error']['message'];
+            } elseif ($transportError !== '') {
+                $message = 'Gemini request failed: ' . $transportError;
+            } elseif ($status > 0) {
+                $message = 'Gemini request failed with HTTP status ' . $status . '.';
             }
-            $error = $message;
-            return '';
+
+            $lastMessage = $message;
+            if (!$this->shouldRetryGeminiModel($status, $message, $transportError)) {
+                break;
+            }
         }
 
-        $data = json_decode($response, true);
-        $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
-        if ($text === '') {
-            $error = 'Gemini returned an empty response.';
+        $error = $lastMessage;
+        return '';
+    }
+
+    private function getGeminiModels()
+    {
+        $configured = defined('GEMINI_MODELS') ? GEMINI_MODELS : (getenv('GEMINI_MODELS') ?: '');
+        $models = array_map(function ($model) {
+            return preg_replace('#^models/#', '', trim($model));
+        }, explode(',', $configured));
+        $models = array_values(array_unique(array_filter($models, fn($model) => $model !== '')));
+
+        return $models ?: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+    }
+
+    private function shouldRetryGeminiModel($status, $message, $transportError)
+    {
+        $text = strtolower($message . ' ' . $transportError);
+        if (strpos($text, 'quota exceeded') !== false
+            || strpos($text, 'rate-limit') !== false
+            || strpos($text, 'billing details') !== false
+            || strpos($text, 'api key') !== false
+            || strpos($text, 'permission') !== false
+        ) {
+            return false;
         }
 
-        return $text;
+        if (in_array((int) $status, [0, 500, 502, 503, 504], true)) {
+            return true;
+        }
+
+        return strpos($text, 'high demand') !== false
+            || strpos($text, 'try again later') !== false
+            || strpos($text, 'overloaded') !== false
+            || strpos($text, 'unavailable') !== false;
     }
 
     private function normalizeAiMealSuggestions($rawMeals, $ingredients, $aiForm)
@@ -455,10 +609,12 @@ class MealsPageController
         return $suggestions;
     }
 
-    private function postJson($url, $body, $headers, &$status)
+    private function postJson($url, $body, $headers, &$status, &$transportError = '')
     {
         $status = 0;
+        $transportError = '';
         if (!function_exists('curl_init')) {
+            $transportError = 'PHP cURL extension is not enabled.';
             return '';
         }
 
@@ -468,11 +624,14 @@ class MealsPageController
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 18
+            CURLOPT_CONNECTTIMEOUT => 8,
+            CURLOPT_TIMEOUT => 45
         ]);
         $response = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($response === false) {
+            $transportError = curl_error($ch) ?: 'No response was received from Gemini.';
+        }
         curl_close($ch);
 
         return $response !== false ? $response : '';

@@ -28,9 +28,54 @@ class MealModel
 
     public function deleteMeal($mealId, $userId)
     {
+        return $this->deleteMeals([$mealId], $userId);
+    }
+
+    public function deleteMeals($mealIds, $userId)
+    {
         $db = config::getConnexion();
-        $stmt = $db->prepare('DELETE FROM custom_meal WHERE id = :id AND user_id = :uid');
-        $stmt->execute(['id' => $mealId, 'uid' => $userId]);
+        $mealIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) $mealIds),
+            fn($mealId) => $mealId > 0
+        )));
+
+        if (!$mealIds) {
+            return 0;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($mealIds), '?'));
+
+        try {
+            $db->beginTransaction();
+
+            $ownerParams = array_merge([(int) $userId], $mealIds);
+            $ownedStmt = $db->prepare("SELECT id FROM custom_meal WHERE user_id = ? AND id IN ($placeholders)");
+            $ownedStmt->execute($ownerParams);
+            $ownedMealIds = array_map('intval', $ownedStmt->fetchAll(PDO::FETCH_COLUMN));
+
+            if (!$ownedMealIds) {
+                $db->commit();
+                return 0;
+            }
+
+            $ownedPlaceholders = implode(',', array_fill(0, count($ownedMealIds), '?'));
+            $ingredientStmt = $db->prepare("DELETE FROM meal_ingredient WHERE meal_id IN ($ownedPlaceholders)");
+            $ingredientStmt->execute($ownedMealIds);
+
+            $deleteParams = array_merge([(int) $userId], $ownedMealIds);
+            $mealStmt = $db->prepare("DELETE FROM custom_meal WHERE user_id = ? AND id IN ($ownedPlaceholders)");
+            $mealStmt->execute($deleteParams);
+            $deleted = $mealStmt->rowCount();
+
+            $db->commit();
+            return $deleted;
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+
+            throw $e;
+        }
     }
 
     public function addMealIngredient($mealId, $ingredientId, $quantity)
