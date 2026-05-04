@@ -308,8 +308,12 @@ class AdminPageController
         $requests = $supportController->listAll();
         $productCategoryIds = [];
         $productCategoryNames = [];
+        $productCategoriesById = $productController->listCategoriesForProductIds(array_map(
+            fn($product) => (int) $product['id'],
+            $products
+        ));
         foreach ($products as $product) {
-            $productCategories = $productController->listCategories($product['id']);
+            $productCategories = $productCategoriesById[(int) $product['id']] ?? [];
             $productCategoryIds[$product['id']] = array_map(fn($category) => $category['id'], $productCategories);
             $productCategoryNames[$product['id']] = array_map(fn($category) => $category['name'], $productCategories);
         }

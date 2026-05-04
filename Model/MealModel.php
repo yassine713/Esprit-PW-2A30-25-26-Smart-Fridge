@@ -63,5 +63,40 @@ class MealModel
         $stmt->execute(['mid' => $mealId]);
         return $stmt->fetchAll();
     }
+
+    public function listIngredientsForMealIds($mealIds)
+    {
+        $mealIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) $mealIds),
+            fn($mealId) => $mealId > 0
+        )));
+
+        $ingredientsByMeal = [];
+        foreach ($mealIds as $mealId) {
+            $ingredientsByMeal[$mealId] = [];
+        }
+
+        if (!$mealIds) {
+            return $ingredientsByMeal;
+        }
+
+        $db = config::getConnexion();
+        $placeholders = implode(',', array_fill(0, count($mealIds), '?'));
+        $sql = "SELECT mi.meal_id, mi.id, mi.quantity_g, i.name, i.calories, i.protein, i.carbs, i.fat
+                FROM meal_ingredient mi
+                JOIN ingredient i ON i.id = mi.ingredient_id
+                WHERE mi.meal_id IN ($placeholders)
+                ORDER BY mi.meal_id, mi.id";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($mealIds);
+
+        foreach ($stmt->fetchAll() as $row) {
+            $mealId = (int) $row['meal_id'];
+            unset($row['meal_id']);
+            $ingredientsByMeal[$mealId][] = $row;
+        }
+
+        return $ingredientsByMeal;
+    }
 }
 ?>

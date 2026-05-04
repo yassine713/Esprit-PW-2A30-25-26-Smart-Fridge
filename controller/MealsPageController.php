@@ -125,13 +125,15 @@ class MealsPageController
         }
 
         $meals = $mealController->listByUser($user['id']);
-        $mealIngredientsMap = [];
+        $mealIds = array_map(fn($meal) => (int) $meal['id'], $meals);
+        $mealIngredientsMap = $mealController->listIngredientsForMealIds($mealIds);
         $mealCoachMap = [];
         $mealProteinMap = [];
         foreach ($meals as $meal) {
-            $mealIngredientsMap[$meal['id']] = $mealController->listMealIngredients($meal['id']);
-            $mealCoachMap[$meal['id']] = $this->buildMealCoach($meal, $mealIngredientsMap[$meal['id']]);
-            $mealProteinMap[$meal['id']] = $this->calculateMealProteinG($mealIngredientsMap[$meal['id']]);
+            $mealId = (int) $meal['id'];
+            $mealIngredientsMap[$mealId] = $mealIngredientsMap[$mealId] ?? [];
+            $mealCoachMap[$mealId] = $this->buildMealCoach($meal, $mealIngredientsMap[$mealId]);
+            $mealProteinMap[$mealId] = $this->calculateMealProteinG($mealIngredientsMap[$mealId]);
         }
 
         if ($sort === 'protein') {
@@ -516,16 +518,20 @@ class MealsPageController
         $query = $queries[0];
         $video = null;
 
-        foreach ($queries as $candidateQuery) {
-            $query = $candidateQuery;
-            $video = $this->findCookingVideo($candidateQuery);
-            if ($video) {
-                break;
-            }
+        if ($this->shouldLookupCookingVideos()) {
+            foreach ($queries as $candidateQuery) {
+                $query = $candidateQuery;
+                $video = $this->findCookingVideo($candidateQuery);
+                if ($video) {
+                    break;
+                }
 
-            if ($this->lastVideoError !== 'No embeddable cooking video was found for this meal.') {
-                break;
+                if ($this->lastVideoError !== 'No embeddable cooking video was found for this meal.') {
+                    break;
+                }
             }
+        } else {
+            $this->lastVideoError = 'Cooking video lookup is loaded on request.';
         }
 
         $ingredientCount = count($ingredientNames);
@@ -541,6 +547,11 @@ class MealsPageController
                 ? 'Matched with your saved ingredients for a more accurate cooking guide.'
                 : 'Add more ingredients to make the video search smarter.'
         ];
+    }
+
+    private function shouldLookupCookingVideos()
+    {
+        return ($_GET['load_videos'] ?? '1') !== '0';
     }
 
     private function buildCookingVideoQuery($mealName, $ingredientNames)
@@ -592,13 +603,18 @@ class MealsPageController
             return $cached['video'];
         }
 
+        $sessionCached = $this->readCachedCookingVideo($query);
+        if ($sessionCached !== null) {
+            return $sessionCached;
+        }
+
         $apiKey = defined('YOUTUBE_API_KEY') && YOUTUBE_API_KEY !== ''
             ? YOUTUBE_API_KEY
             : (getenv('YOUTUBE_API_KEY') ?: '');
 
         if ($apiKey === '' || $query === '') {
             $this->lastVideoError = 'YouTube API key is missing.';
-            $this->videoCache[$query] = ['video' => null, 'error' => $this->lastVideoError];
+            $this->cacheCookingVideo($query, null, $this->lastVideoError);
             return null;
         }
 
@@ -617,20 +633,20 @@ class MealsPageController
 
         if (!$response) {
             $this->lastVideoError = 'Could not reach the YouTube API from this server.';
-            $this->videoCache[$query] = ['video' => null, 'error' => $this->lastVideoError];
+            $this->cacheCookingVideo($query, null, $this->lastVideoError);
             return null;
         }
 
         $data = json_decode($response, true);
         if (!is_array($data)) {
             $this->lastVideoError = 'YouTube API returned an invalid response.';
-            $this->videoCache[$query] = ['video' => null, 'error' => $this->lastVideoError];
+            $this->cacheCookingVideo($query, null, $this->lastVideoError);
             return null;
         }
 
         if (isset($data['error'])) {
             $this->lastVideoError = $this->formatYouTubeApiError($data['error']);
-            $this->videoCache[$query] = ['video' => null, 'error' => $this->lastVideoError];
+            $this->cacheCookingVideo($query, null, $this->lastVideoError);
             return null;
         }
 
@@ -639,7 +655,7 @@ class MealsPageController
 
         if ($videoId === '') {
             $this->lastVideoError = 'No embeddable cooking video was found for this meal.';
-            $this->videoCache[$query] = ['video' => null, 'error' => $this->lastVideoError];
+            $this->cacheCookingVideo($query, null, $this->lastVideoError);
             return null;
         }
 
@@ -648,9 +664,57 @@ class MealsPageController
             'title' => $item['snippet']['title'] ?? 'Cooking tutorial',
             'channel' => $item['snippet']['channelTitle'] ?? 'YouTube'
         ];
-        $this->videoCache[$query] = ['video' => $video, 'error' => ''];
+        $this->cacheCookingVideo($query, $video, '');
 
         return $video;
+    }
+
+    private function readCachedCookingVideo($query)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return null;
+        }
+
+        $cached = $_SESSION['nutribudget_video_cache'][$query] ?? null;
+        if (!is_array($cached) || ((int) ($cached['created_at'] ?? 0) + 86400) < time()) {
+            return null;
+        }
+
+        $video = $cached['video'] ?? null;
+        $this->lastVideoError = (string) ($cached['error'] ?? '');
+        $this->videoCache[$query] = [
+            'video' => $video,
+            'error' => $this->lastVideoError
+        ];
+
+        return $video;
+    }
+
+    private function cacheCookingVideo($query, $video, $error)
+    {
+        $this->videoCache[$query] = [
+            'video' => $video,
+            'error' => $error
+        ];
+
+        if (session_status() !== PHP_SESSION_ACTIVE || (!$video && $error !== 'No embeddable cooking video was found for this meal.')) {
+            return;
+        }
+
+        $_SESSION['nutribudget_video_cache'][$query] = [
+            'video' => $video,
+            'error' => $error,
+            'created_at' => time()
+        ];
+
+        if (count($_SESSION['nutribudget_video_cache']) > 50) {
+            $_SESSION['nutribudget_video_cache'] = array_slice(
+                $_SESSION['nutribudget_video_cache'],
+                -50,
+                null,
+                true
+            );
+        }
     }
 
     private function formatYouTubeApiError($error)

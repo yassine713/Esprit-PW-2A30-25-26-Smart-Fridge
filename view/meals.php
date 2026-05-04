@@ -23,8 +23,19 @@ $mealsPageController = new MealsPageController();
 $isProteinSort = ($sort ?? '') === 'protein';
 $organizeHref = $isProteinSort ? 'meals.php' : 'meals.php?sort=protein&dir=desc';
 $organizeLabel = $isProteinSort ? 'Clear' : 'Organize';
+$isLoadingVideos = ($_GET['load_videos'] ?? '1') !== '0';
 $totalProteinG = array_sum($mealProteinMap);
 $averageProteinG = count($meals) > 0 ? $totalProteinG / count($meals) : 0;
+$mealVideoError = '';
+if ($isLoadingVideos) {
+  foreach ($mealCoachMap as $coach) {
+    $error = (string) ($coach['videoError'] ?? '');
+    if ($error !== '' && !in_array($error, ['Cooking video lookup is loaded on request.', 'No embeddable cooking video was found for this meal.'], true)) {
+      $mealVideoError = $error;
+      break;
+    }
+  }
+}
 
 if (!function_exists('e')) {
   function e($value)
@@ -78,12 +89,19 @@ function meal_ingredient_text($ingredients)
 
 function meal_image_url($meal, $ingredients)
 {
-  $mealPhotoUrl = mealdb_cooked_meal_image_url($meal, $ingredients);
-  if ($mealPhotoUrl !== '') {
-    return $mealPhotoUrl;
+  if (mealdb_lookup_enabled()) {
+    $mealPhotoUrl = mealdb_cooked_meal_image_url($meal, $ingredients);
+    if ($mealPhotoUrl !== '') {
+      return $mealPhotoUrl;
+    }
   }
 
   return meal_generated_image_url($meal, $ingredients);
+}
+
+function mealdb_lookup_enabled()
+{
+  return ($_GET['load_meal_photos'] ?? '1') !== '0';
 }
 
 function meal_generated_image_url($meal, $ingredients)
@@ -485,7 +503,7 @@ function meal_placeholder_image_url($meal)
                 ?>
                 <article class="ai-result-card">
                   <div class="ai-result-image generated-meal-art">
-                    <img src="<?= e($suggestionImage) ?>" alt="<?= e($suggestion['name']) ?>" loading="lazy" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($suggestionPlaceholder) ?>';" />
+                    <img src="<?= e($suggestionImage) ?>" alt="<?= e($suggestion['name']) ?>" loading="lazy" decoding="async" width="640" height="360" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($suggestionPlaceholder) ?>';" />
                   </div>
                   <div class="ai-result-body">
                     <span class="ai-result-kicker"><?= e($suggestion['type']) ?></span>
@@ -542,6 +560,9 @@ function meal_placeholder_image_url($meal)
             <?php if ($isProteinSort): ?>
               <p class="muted meals-sort-hint">Organized by protein from high to low.</p>
             <?php endif; ?>
+            <?php if ($mealVideoError !== ''): ?>
+              <div class="ai-generator-alert"><?= e($mealVideoError) ?></div>
+            <?php endif; ?>
             <div class="meal-list-shell">
               <?php foreach ($meals as $meal): ?>
                 <?php
@@ -554,7 +575,7 @@ function meal_placeholder_image_url($meal)
                 <article class="meal-row<?= ($coach && $coach['video']) ? ' has-video' : ' no-video' ?>">
                   <div class="meal-row-summary">
                     <div class="meal-thumb generated-meal-art">
-                      <img src="<?= e($mealImageUrl) ?>" alt="<?= e($meal['name']) ?>" loading="eager" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($mealPlaceholderUrl) ?>';" />
+                      <img src="<?= e($mealImageUrl) ?>" alt="<?= e($meal['name']) ?>" loading="lazy" decoding="async" width="640" height="360" onerror="this.onerror=null;this.closest('.generated-meal-art').classList.add('image-error');this.src='<?= e($mealPlaceholderUrl) ?>';" />
                     </div>
                     <div class="meal-row-details">
                       <form method="post" class="inline-edit meal-edit-form meal-row-edit" novalidate>
@@ -615,6 +636,7 @@ function meal_placeholder_image_url($meal)
                           <iframe
                             src="https://www.youtube.com/embed/<?= e($coach['video']['id']) ?>"
                             title="<?= e($coach['video']['title']) ?>"
+                            loading="lazy"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowfullscreen></iframe>
                         </div>

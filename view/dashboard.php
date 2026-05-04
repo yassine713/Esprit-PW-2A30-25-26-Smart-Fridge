@@ -14,7 +14,7 @@ require_login();
   <div class="app" data-view="dashboard" data-page="home">
     <main class="template-dashboard">
       <section class="template-hero" aria-label="NutriBudget home">
-        <img class="template-hero-media" src="assets/Home_Screen.gif" alt="NutriBudget animated fitness preview" />
+        <img class="template-hero-media" src="assets/Home_Screen.gif" alt="NutriBudget animated fitness preview" width="1280" height="720" loading="lazy" decoding="async" fetchpriority="low" />
         <div class="template-hero-shade"></div>
         <header class="template-hero-nav">
           <a class="template-logo" href="dashboard.php" aria-label="NutriBudget dashboard">
