@@ -112,6 +112,10 @@ $typePalette = [
                 <h3>Submit a Support Request</h3>
                 <form method="post" id="support-form" novalidate>
                   <input type="hidden" name="action" value="add_request" />
+                  <input type="hidden" name="ai_category" id="ai-category-field" />
+                  <input type="hidden" name="ai_priority" id="ai-priority-field" />
+                  <input type="hidden" name="ai_summary" id="ai-summary-field" />
+                  <input type="hidden" name="ai_suggested_solution" id="ai-solution-field" />
                   <div class="two-col inputs">
                     <label>
                       <span>First name</span>
@@ -149,7 +153,40 @@ $typePalette = [
                     <textarea name="description" id="issue-desc" rows="5" placeholder="Please provide as much detail as possible..."></textarea>
                     <small class="error" data-error-for="issue-desc"></small>
                   </label>
-                  <button class="btn primary" type="submit">Submit Request</button>
+                  <div class="support-ai-assistant" id="support-ai-assistant">
+                    <div class="support-ai-assistant-head">
+                      <div>
+                        <span class="support-ai-kicker">AI assistant</span>
+                        <h4>Smart ticket assistant</h4>
+                      </div>
+                      <button class="btn soft" type="button" id="ai-analyze-btn">Analyze Problem with AI</button>
+                    </div>
+                    <div class="support-ai-status" id="ai-status" aria-live="polite"></div>
+                    <div class="support-ai-result" id="ai-result" hidden>
+                      <div class="support-ai-result-meta">
+                        <span><strong>Category:</strong> <b id="ai-result-category"></b></span>
+                        <span><strong>Priority:</strong> <b id="ai-result-priority"></b></span>
+                      </div>
+                      <div class="support-ai-summary">
+                        <strong>Summary:</strong>
+                        <p id="ai-result-summary"></p>
+                      </div>
+                      <div class="support-ai-solution">
+                        <strong>Suggested solution:</strong>
+                        <p id="ai-result-solution"></p>
+                      </div>
+                      <div class="support-ai-actions">
+                        <button class="btn soft" type="button" id="ai-solved-btn">This solved my problem</button>
+                        <button class="btn ghost" type="button" id="ai-submit-anyway-btn">Submit ticket anyway</button>
+                      </div>
+                    </div>
+                    <div class="support-ai-actions" id="ai-fallback-actions" hidden>
+                      <button class="btn ghost" type="button" id="ai-submit-without-analysis-btn">Submit ticket without AI</button>
+                    </div>
+                    <div class="support-ai-solved" id="ai-solved-message" hidden>
+                      Glad that helped. No support ticket was created.
+                    </div>
+                  </div>
                 </form>
               </div>
 
@@ -252,6 +289,23 @@ $typePalette = [
     const type = document.getElementById('type');
     const title = document.getElementById('issue-title');
     const desc = document.getElementById('issue-desc');
+    const aiAnalyzeBtn = document.getElementById('ai-analyze-btn');
+    const aiResult = document.getElementById('ai-result');
+    const aiStatus = document.getElementById('ai-status');
+    const aiSolvedMessage = document.getElementById('ai-solved-message');
+    const aiFallbackActions = document.getElementById('ai-fallback-actions');
+    const aiSolvedBtn = document.getElementById('ai-solved-btn');
+    const aiSubmitAnywayBtn = document.getElementById('ai-submit-anyway-btn');
+    const aiSubmitWithoutAnalysisBtn = document.getElementById('ai-submit-without-analysis-btn');
+    const aiResultCategory = document.getElementById('ai-result-category');
+    const aiResultPriority = document.getElementById('ai-result-priority');
+    const aiResultSummary = document.getElementById('ai-result-summary');
+    const aiResultSolution = document.getElementById('ai-result-solution');
+    const aiCategoryField = document.getElementById('ai-category-field');
+    const aiPriorityField = document.getElementById('ai-priority-field');
+    const aiSummaryField = document.getElementById('ai-summary-field');
+    const aiSolutionField = document.getElementById('ai-solution-field');
+    let currentAiAnalysis = null;
 
     function setError(id, message) {
       const el = document.querySelector(`[data-error-for="${id}"]`);
@@ -262,7 +316,7 @@ $typePalette = [
       if (el) el.textContent = '';
     }
 
-    form.addEventListener('submit', (e) => {
+    function validateSupportForm() {
       let ok = true;
       const nameOk = /^[A-Za-z\u00C0-\u00FF' -]{2,40}$/.test(first.value.trim());
       const lastOk = /^[A-Za-z\u00C0-\u00FF' -]{2,40}$/.test(last.value.trim());
@@ -273,7 +327,135 @@ $typePalette = [
       if (type.value.trim() === '') { setError('type', 'Choose a type.'); ok = false; } else clearError('type');
       if (title.value.trim().length < 4) { setError('issue-title', 'Title must be at least 4 characters.'); ok = false; } else clearError('issue-title');
       if (desc.value.trim().length < 10) { setError('issue-desc', 'Description must be at least 10 characters.'); ok = false; } else clearError('issue-desc');
-      if (!ok) e.preventDefault();
+
+      return ok;
+    }
+
+    function setAiStatus(message, isError = false) {
+      if (!aiStatus) return;
+      aiStatus.textContent = message;
+      aiStatus.classList.toggle('is-error', isError);
+    }
+
+    function mapCategoryToType(category) {
+      if (category === 'Exercise Problem') return 'Exercise';
+      if (category === 'Meal Recommendation Problem' || category === 'Budget Problem' || category === 'External API Problem') return 'Meal';
+      if (category === 'Profile Problem' || category === 'Login Problem') return 'Profile';
+      return '';
+    }
+
+    function setAiHiddenFields(analysis) {
+      aiCategoryField.value = analysis ? analysis.category : '';
+      aiPriorityField.value = analysis ? analysis.priority : '';
+      aiSummaryField.value = analysis ? analysis.short_summary : '';
+      aiSolutionField.value = analysis ? analysis.suggested_solution : '';
+    }
+
+    function renderAiAnalysis(analysis) {
+      currentAiAnalysis = analysis;
+      setAiHiddenFields(analysis);
+      aiResultCategory.textContent = analysis.category;
+      aiResultPriority.textContent = analysis.priority;
+      aiResultSummary.textContent = analysis.short_summary;
+      aiResultSolution.textContent = analysis.suggested_solution;
+      aiResult.hidden = false;
+      aiFallbackActions.hidden = true;
+      aiSolvedMessage.hidden = true;
+      setAiStatus('');
+
+      const mappedType = mapCategoryToType(analysis.category);
+      if (mappedType && type.value.trim() === '') {
+        type.value = mappedType;
+        type.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (title.value.trim().length < 4 && analysis.short_summary) {
+        title.value = analysis.short_summary.slice(0, 120);
+        title.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+
+    if (aiAnalyzeBtn) {
+      aiAnalyzeBtn.addEventListener('click', async () => {
+        const problem = desc.value.trim();
+        currentAiAnalysis = null;
+        setAiHiddenFields(null);
+        aiResult.hidden = true;
+        aiFallbackActions.hidden = true;
+        aiSolvedMessage.hidden = true;
+
+        if (!validateSupportForm()) {
+          setAiStatus('Please fix the highlighted fields before AI analysis.', true);
+          return;
+        }
+
+        clearError('issue-desc');
+        aiAnalyzeBtn.disabled = true;
+        aiAnalyzeBtn.textContent = 'Analyzing...';
+        setAiStatus('Analyzing your support problem...');
+
+        try {
+          const payload = new FormData();
+          payload.append('action', 'analyze_support_problem');
+          payload.append('problem', problem);
+          const response = await fetch('support.php', {
+            method: 'POST',
+            body: payload,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'AI analysis is unavailable.');
+          }
+          renderAiAnalysis(data.analysis);
+        } catch (error) {
+          aiFallbackActions.hidden = false;
+          setAiStatus(`${error.message} You can still submit the ticket without AI analysis.`, true);
+        } finally {
+          aiAnalyzeBtn.disabled = false;
+          aiAnalyzeBtn.textContent = 'Analyze Problem with AI';
+        }
+      });
+    }
+
+    if (aiSolvedBtn) {
+      aiSolvedBtn.addEventListener('click', () => {
+        currentAiAnalysis = null;
+        setAiHiddenFields(null);
+        aiResult.hidden = true;
+        aiFallbackActions.hidden = true;
+        aiSolvedMessage.hidden = false;
+        setAiStatus('');
+      });
+    }
+
+    if (aiSubmitAnywayBtn) {
+      aiSubmitAnywayBtn.addEventListener('click', () => {
+        if (currentAiAnalysis) {
+          setAiHiddenFields(currentAiAnalysis);
+        }
+        if (form.requestSubmit) {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      });
+    }
+
+    if (aiSubmitWithoutAnalysisBtn) {
+      aiSubmitWithoutAnalysisBtn.addEventListener('click', () => {
+        currentAiAnalysis = null;
+        setAiHiddenFields(null);
+        if (form.requestSubmit) {
+          form.requestSubmit();
+        } else {
+          form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      });
+    }
+
+    form.addEventListener('submit', (e) => {
+      if (!validateSupportForm()) e.preventDefault();
     });
   </script>
   <script src="user-panel.js"></script>

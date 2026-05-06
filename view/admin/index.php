@@ -383,6 +383,13 @@ if (!function_exists('e')) {
             <div class="admin-list">
               <?php foreach ($requests as $r): ?>
                 <?php $responses = $responsesByRequest[(int) $r['id']] ?? []; ?>
+                <?php
+                  $aiCategory = trim((string) ($r['ai_category'] ?? ''));
+                  $aiPriority = trim((string) ($r['ai_priority'] ?? ''));
+                  $aiSummary = trim((string) ($r['ai_summary'] ?? ''));
+                  $aiSolution = trim((string) ($r['ai_suggested_solution'] ?? ''));
+                  $hasAiSupportData = $aiCategory !== '' || $aiPriority !== '' || $aiSummary !== '' || $aiSolution !== '';
+                ?>
                 <article class="admin-item support-admin-item" data-support-type="<?= e($r['type']) ?>">
                   <div class="admin-item-main">
                     <h4><?= e($r['issue_title']) ?></h4>
@@ -396,10 +403,38 @@ if (!function_exists('e')) {
                       <span><?= e($r['first_name'] . ' ' . $r['last_name']) ?></span>
                       <span><?= e($r['created_at']) ?></span>
                     </div>
+                    <?php if ($hasAiSupportData): ?>
+                      <div class="support-ai-admin-card">
+                        <div class="support-ai-admin-head">
+                          <span>AI support summary</span>
+                          <?php if ($aiPriority !== ''): ?>
+                            <strong><?= e($aiPriority) ?></strong>
+                          <?php endif; ?>
+                        </div>
+                        <div class="support-ai-admin-grid">
+                          <?php if ($aiCategory !== ''): ?>
+                            <span><b>Category</b><?= e($aiCategory) ?></span>
+                          <?php endif; ?>
+                          <?php if ($aiSummary !== ''): ?>
+                            <span><b>Summary</b><?= e($aiSummary) ?></span>
+                          <?php endif; ?>
+                        </div>
+                        <?php if ($aiSolution !== ''): ?>
+                          <div class="support-ai-admin-solution">
+                            <b>Suggested solution</b>
+                            <p><?= e($aiSolution) ?></p>
+                          </div>
+                        <?php endif; ?>
+                      </div>
+                    <?php endif; ?>
                     <form method="post" class="admin-form compact support-response-create" novalidate>
                       <input type="hidden" name="action" value="add_response" />
                       <input type="hidden" name="request_id" value="<?= e($r['id']) ?>" />
-                      <input type="text" name="message" placeholder="Response message" />
+                      <div class="support-ai-reply-actions">
+                        <button class="icon-btn support-ai-reply-btn" type="button" data-request-id="<?= e($r['id']) ?>">Generate AI Reply</button>
+                        <span class="support-ai-reply-status" aria-live="polite"></span>
+                      </div>
+                      <textarea name="message" rows="3" placeholder="Response message"></textarea>
                       <button class="icon-btn" type="submit">Respond</button>
                       <small class="error form-error">Response message must be at least 2 characters.</small>
                     </form>
@@ -416,7 +451,7 @@ if (!function_exists('e')) {
                             <form method="post" class="admin-form compact support-response-edit" novalidate>
                               <input type="hidden" name="action" value="update_response" />
                               <input type="hidden" name="response_id" value="<?= e($response['id']) ?>" />
-                              <input type="text" name="message" value="<?= e($response['message']) ?>" />
+                              <textarea name="message" rows="2"><?= e($response['message']) ?></textarea>
                               <button class="icon-btn" type="submit">Save</button>
                               <small class="error form-error">Response message must be at least 2 characters.</small>
                             </form>
@@ -496,13 +531,58 @@ if (!function_exists('e')) {
     });
 
     document.querySelectorAll('.support-response-create, .support-response-edit').forEach((responseForm) => {
-      const messageInput = responseForm.querySelector('input[name="message"]');
+      const messageInput = responseForm.querySelector('[name="message"]');
       const error = responseForm.querySelector('.error');
 
       responseForm.addEventListener('submit', (e) => {
         const ok = messageInput && messageInput.value.trim().length >= 2;
         if (error) error.classList.toggle('is-visible', !ok);
         if (!ok) e.preventDefault();
+      });
+    });
+
+    document.querySelectorAll('.support-ai-reply-btn').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const responseForm = button.closest('.support-response-create');
+        const messageInput = responseForm ? responseForm.querySelector('[name="message"]') : null;
+        const status = responseForm ? responseForm.querySelector('.support-ai-reply-status') : null;
+        if (!messageInput) return;
+
+        button.disabled = true;
+        button.textContent = 'Generating...';
+        if (status) {
+          status.textContent = 'Preparing reply...';
+          status.classList.remove('is-error');
+        }
+
+        try {
+          const payload = new FormData();
+          payload.append('action', 'generate_support_ai_reply');
+          payload.append('request_id', button.dataset.requestId || '');
+          const response = await fetch('index.php', {
+            method: 'POST',
+            body: payload,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          const data = await response.json();
+          if (!response.ok || !data.success) {
+            throw new Error(data.message || 'AI reply generation is unavailable.');
+          }
+
+          messageInput.value = data.reply;
+          messageInput.focus();
+          messageInput.dispatchEvent(new Event('input', { bubbles: true }));
+          if (status) status.textContent = 'Reply generated. Edit it before sending.';
+        } catch (error) {
+          if (status) {
+            status.textContent = `${error.message}`;
+            status.classList.add('is-error');
+          }
+        } finally {
+          button.disabled = false;
+          button.textContent = 'Generate AI Reply';
+        }
       });
     });
 
