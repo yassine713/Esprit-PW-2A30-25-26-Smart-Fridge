@@ -1768,6 +1768,94 @@ select {
   align-items: start;
 }
 
+.support-ai-admin-card {
+  background: #f8fbf5;
+  border: 1px solid #dcebd7;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 14px;
+  padding: 12px;
+}
+
+.support-ai-admin-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.support-ai-admin-head span,
+.support-ai-admin-grid b,
+.support-ai-admin-solution b {
+  color: #2f7135;
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.support-ai-admin-head strong {
+  background: #fff3c4;
+  border: 1px solid #efd46d;
+  border-radius: 999px;
+  color: #7a5b00;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.support-ai-admin-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.support-ai-admin-grid span,
+.support-ai-admin-solution {
+  background: #ffffff;
+  border: 1px solid #e5ede1;
+  border-radius: 8px;
+  color: #4f5f55;
+  display: grid;
+  font-size: 13px;
+  gap: 5px;
+  padding: 10px;
+}
+
+.support-ai-admin-solution p {
+  margin: 0;
+}
+
+.support-response-create .support-ai-reply-actions,
+.support-response-create textarea,
+.support-response-create .form-error {
+  grid-column: 1 / -1;
+}
+
+.support-ai-reply-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.support-ai-reply-status {
+  color: #64705f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.support-ai-reply-status.is-error {
+  color: #b01212;
+}
+
+.support-response-create textarea,
+.support-response-edit textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
 @media (max-width: 1100px) {
   .admin-grid {
     grid-template-columns: 1fr;
@@ -2434,6 +2522,124 @@ body {
 
 .app[data-view="dashboard"] .support-request-edit {
   gap: 10px;
+}
+
+.app[data-page="support"] .support-ai-assistant {
+  background:
+    linear-gradient(135deg, rgba(255, 209, 102, 0.12), rgba(45, 140, 255, 0.08)),
+    var(--user-panel);
+  border: 1px solid var(--user-line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 16px;
+  padding: 14px;
+}
+
+.app[data-page="support"] .support-ai-assistant-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.app[data-page="support"] .support-ai-assistant h4 {
+  font-size: 18px;
+  line-height: 1.15;
+  margin: 3px 0 0;
+}
+
+.app[data-page="support"] .support-ai-kicker {
+  color: var(--page-b);
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.app[data-page="support"] .support-ai-status {
+  color: var(--user-muted);
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 18px;
+}
+
+.app[data-page="support"] .support-ai-status.is-error {
+  color: var(--user-danger);
+}
+
+.app[data-page="support"] .support-ai-result {
+  background: #ffffff;
+  border: 1px solid #e2eadf;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.app[data-page="support"] .support-ai-result[hidden],
+.app[data-page="support"] .support-ai-solved[hidden] {
+  display: none;
+}
+
+.app[data-page="support"] .support-ai-result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app[data-page="support"] .support-ai-result-meta span {
+  background: #f4f8f2;
+  border: 1px solid #e2eadf;
+  border-radius: 999px;
+  color: #4f5f55;
+  font-size: 12px;
+  padding: 7px 10px;
+}
+
+.app[data-page="support"] .support-ai-result-meta b {
+  color: #163b23;
+}
+
+.app[data-page="support"] .support-ai-summary,
+.app[data-page="support"] .support-ai-solution {
+  display: grid;
+  gap: 5px;
+}
+
+.app[data-page="support"] .support-ai-summary strong,
+.app[data-page="support"] .support-ai-solution strong {
+  color: #163b23;
+  font-size: 13px;
+}
+
+.app[data-page="support"] .support-ai-summary p,
+.app[data-page="support"] .support-ai-solution p {
+  color: var(--user-muted);
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.app[data-page="support"] .support-ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.app[data-page="support"] .support-ai-actions[hidden] {
+  display: none;
+}
+
+.app[data-page="support"] .support-ai-solved {
+  background: #e8f6e8;
+  border: 1px solid #cfe8cf;
+  border-radius: 8px;
+  color: #1f6b2a;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 11px 12px;
 }
 
 .app[data-view="dashboard"] .profile-card {
@@ -5870,6 +6076,65 @@ body.is-page-navigating .app[data-view="dashboard"]:not([data-page="home"]) .con
 
 @media (max-width: 780px) {
   .app[data-page="meals"] .page-head {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Match the Support header widget to the Meal Studio header size and placement */
+.app[data-page="support"] .page-head {
+  align-items: center !important;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(135deg, #173d24 0%, #ff6b4a 62%, #2d8cff 100%) !important;
+  background-size: 38px 38px, 38px 38px, auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 18px 42px rgba(31, 49, 37, 0.14) !important;
+  color: #ffffff !important;
+  display: grid !important;
+  gap: 18px !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  margin-bottom: 16px !important;
+  margin-left: calc(50% - 50vw) !important;
+  margin-right: calc(50% - 50vw) !important;
+  margin-top: -1px !important;
+  min-height: 172px !important;
+  overflow: hidden !important;
+  padding: clamp(22px, 4vw, 36px) clamp(18px, 4vw, 52px) !important;
+  position: relative !important;
+  width: 100vw !important;
+}
+
+.app[data-page="support"] .page-head h2 {
+  color: #ffffff !important;
+  font-size: clamp(34px, 4vw, 52px) !important;
+  line-height: 1 !important;
+  margin: 0 !important;
+  max-width: 760px !important;
+}
+
+.app[data-page="support"] .page-head p {
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-size: 16px !important;
+  line-height: 1.55 !important;
+  margin: 10px 0 0 !important;
+  max-width: 700px !important;
+}
+
+.app[data-page="support"] .page-head .page-kicker {
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.app[data-page="support"] .page-head .btn.ghost {
+  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  color: #ffffff !important;
+}
+
+@media (max-width: 780px) {
+  .app[data-page="support"] .page-head {
     grid-template-columns: 1fr !important;
   }
 }

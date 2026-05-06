@@ -3,11 +3,15 @@ require_once __DIR__ . '/../config.php';
 
 class SupportModel
 {
-    public function createRequest($userId, $first, $last, $email, $type, $title, $desc)
+    private $supportRequestColumns = null;
+
+    public function createRequest($userId, $first, $last, $email, $type, $title, $desc, $aiData = [])
     {
         $db = config::getConnexion();
-        $stmt = $db->prepare('INSERT INTO support_request (user_id, first_name, last_name, email, type, issue_title, description, status, created_at) VALUES (:uid, :first, :last, :email, :type, :title, :desc, :status, NOW())');
-        $stmt->execute([
+
+        $columns = ['user_id', 'first_name', 'last_name', 'email', 'type', 'issue_title', 'description', 'status', 'created_at'];
+        $values = [':uid', ':first', ':last', ':email', ':type', ':title', ':desc', ':status', 'NOW()'];
+        $params = [
             'uid' => $userId,
             'first' => $first,
             'last' => $last,
@@ -16,7 +20,34 @@ class SupportModel
             'title' => $title,
             'desc' => $desc,
             'status' => 'pending'
-        ]);
+        ];
+
+        $aiData = is_array($aiData) ? $aiData : [];
+        $optionalColumns = [
+            'ai_category' => 'ai_category',
+            'ai_priority' => 'ai_priority',
+            'ai_summary' => 'ai_summary',
+            'ai_suggested_solution' => 'ai_suggested_solution',
+            'ai_user_solved' => 'ai_user_solved'
+        ];
+
+        foreach ($optionalColumns as $column => $dataKey) {
+            if (array_key_exists($dataKey, $aiData) && $this->supportRequestHasColumn($column)) {
+                $columns[] = $column;
+                $values[] = ':' . $column;
+                $params[$column] = $aiData[$dataKey];
+            }
+        }
+
+        if ($aiData && $this->supportRequestHasColumn('ai_created_at')) {
+            $columns[] = 'ai_created_at';
+            $values[] = 'NOW()';
+        }
+
+        $columnSql = implode(', ', array_map(fn($column) => '`' . $column . '`', $columns));
+        $valueSql = implode(', ', $values);
+        $stmt = $db->prepare("INSERT INTO support_request ($columnSql) VALUES ($valueSql)");
+        $stmt->execute($params);
     }
 
     public function listByUser($userId)
@@ -30,7 +61,28 @@ class SupportModel
     public function listAll()
     {
         $db = config::getConnexion();
-        return $db->query('SELECT * FROM support_request ORDER BY created_at DESC, id DESC')->fetchAll();
+        $orderBy = 'created_at DESC, id DESC';
+        if ($this->supportRequestHasColumn('ai_priority')) {
+            $orderBy = "CASE ai_priority
+                    WHEN 'Urgent' THEN 4
+                    WHEN 'High' THEN 3
+                    WHEN 'Medium' THEN 2
+                    WHEN 'Low' THEN 1
+                    ELSE 0
+                END DESC,
+                created_at DESC,
+                id DESC";
+        }
+
+        return $db->query("SELECT * FROM support_request ORDER BY $orderBy")->fetchAll();
+    }
+
+    public function getRequestById($id)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare('SELECT * FROM support_request WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        return $stmt->fetch() ?: null;
     }
 
     public function getTypeStatsByUser($userId)
@@ -156,6 +208,37 @@ class SupportModel
             'status' => $hasResponses ? 'resolved' : 'pending',
             'id' => $requestId
         ]);
+    }
+
+    private function supportRequestHasColumn($column)
+    {
+        $allowedColumns = [
+            'ai_category' => true,
+            'ai_priority' => true,
+            'ai_summary' => true,
+            'ai_suggested_solution' => true,
+            'ai_user_solved' => true,
+            'ai_created_at' => true
+        ];
+
+        if (!isset($allowedColumns[$column])) {
+            return false;
+        }
+
+        if ($this->supportRequestColumns === null) {
+            try {
+                $db = config::getConnexion();
+                $stmt = $db->query('SHOW COLUMNS FROM support_request');
+                $this->supportRequestColumns = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $this->supportRequestColumns[$row['Field']] = true;
+                }
+            } catch (Exception $e) {
+                $this->supportRequestColumns = [];
+            }
+        }
+
+        return isset($this->supportRequestColumns[$column]);
     }
 }
 ?>

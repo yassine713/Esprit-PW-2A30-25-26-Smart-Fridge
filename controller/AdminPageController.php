@@ -170,6 +170,30 @@ class AdminPageController
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $action = $_POST['action'] ?? '';
 
+            if ($action === 'generate_support_ai_reply') {
+                $request = $supportController->getRequestById((int) ($_POST['request_id'] ?? 0));
+                if (!$request) {
+                    $this->sendJson([
+                        'success' => false,
+                        'message' => 'Support ticket was not found.'
+                    ], 404);
+                }
+
+                $error = '';
+                $reply = $supportController->generateAdminReplyForRequest($request, $error);
+                if ($reply === '') {
+                    $this->sendJson([
+                        'success' => false,
+                        'message' => $error !== '' ? $error : 'AI reply generation is unavailable.'
+                    ], 422);
+                }
+
+                $this->sendJson([
+                    'success' => true,
+                    'reply' => $reply
+                ]);
+            }
+
             if ($action === 'set_role') {
                 $userController->setRole((int) ($_POST['user_id'] ?? 0), $_POST['role'] ?? 'user');
             }
@@ -334,6 +358,14 @@ class AdminPageController
             'productCategoryNames' => $productCategoryNames,
             'responsesByRequest' => $responsesByRequest
         ];
+    }
+
+    private function sendJson($payload, $statusCode = 200)
+    {
+        http_response_code($statusCode);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload);
+        exit;
     }
 }
 ?>
