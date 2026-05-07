@@ -200,7 +200,7 @@ function product_image_name($name)
                     data-stock="<?= e($p['stock']) ?>"
                   >
                     <div class="product-thumb">
-                      <img src="<?= e($productImageUrl) ?>" alt="<?= e($p['name']) ?>" loading="lazy" />
+                      <img src="<?= e($productImageUrl) ?>" alt="<?= e($p['name']) ?>" loading="lazy" decoding="async" width="400" height="300" />
                     </div>
                     <div class="product-card-body">
                       <div class="category-chip-row">

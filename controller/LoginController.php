@@ -35,6 +35,12 @@ class LoginController
 
     private function redirectFor($user)
     {
+        if (!empty($_SESSION['pending_qr_scan']) && ($user['role'] ?? 'user') !== 'admin') {
+            $pendingQrScan = $_SESSION['pending_qr_scan'];
+            unset($_SESSION['pending_qr_scan']);
+            return $pendingQrScan;
+        }
+
         return ($user['role'] ?? 'user') === 'admin' ? 'admin/index.php' : 'dashboard.php';
     }
 }

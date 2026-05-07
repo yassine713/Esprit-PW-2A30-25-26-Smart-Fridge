@@ -18,7 +18,7 @@
 
 * {
   box-sizing: border-box;
-  font-family: 'Urbanist', sans-serif;
+  font-family: 'Urbanist', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 body {
@@ -4560,6 +4560,21 @@ body {
   padding-top: 92px;
 }
 
+/* Lightweight navigation transition */
+.app[data-view="dashboard"]:not([data-page="home"]) .content {
+  transition: opacity 90ms ease, transform 90ms ease;
+}
+
+body.is-page-navigating .app[data-view="dashboard"]:not([data-page="home"]) .content {
+  opacity: 0.76;
+  transform: translateY(6px);
+}
+
+.app[data-view="dashboard"]:not([data-page="home"]) .nav-link.is-nav-target {
+  background: rgba(16, 32, 23, 0.08);
+  color: #07120b;
+}
+
 @media (max-width: 980px) {
   .app[data-view="dashboard"]:not([data-page="home"]) .sidebar {
     align-items: center;
@@ -4604,6 +4619,17 @@ body {
 
   .app[data-view="dashboard"]:not([data-page="home"]) .content {
     padding-top: 78px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app[data-view="dashboard"]:not([data-page="home"]) .content {
+    transition: none;
+  }
+
+  body.is-page-navigating .app[data-view="dashboard"]:not([data-page="home"]) .content {
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -5957,6 +5983,114 @@ body {
 
 @media (max-width: 780px) {
   .app[data-page="meals"] .ai-budget-control {
+    grid-template-columns: 1fr;
+  }
+}
+
+.qr-exercise-list {
+  display: grid;
+  gap: 10px;
+}
+
+.qr-exercise-row {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.48);
+  border: 1px solid rgba(20, 60, 50, 0.12);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.qr-exercise-row strong {
+  color: #172033;
+  font-size: 0.95rem;
+}
+
+.qr-exercise-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.qr-open-btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.qr-modal[hidden] {
+  display: none;
+}
+
+.qr-modal {
+  background: rgba(12, 20, 16, 0.58);
+  display: grid;
+  inset: 0;
+  padding: 24px;
+  place-items: center;
+  position: fixed;
+  z-index: 50;
+}
+
+.qr-modal-panel {
+  background: var(--card, #fff);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  padding: 22px;
+  width: min(420px, 92vw);
+}
+
+.qr-modal-head {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.qr-modal-head h3 {
+  margin: 0;
+}
+
+.qr-modal-image {
+  background: #fff;
+  border-radius: 8px;
+  height: 220px;
+  object-fit: contain;
+  width: 220px;
+}
+
+.qr-modal-link {
+  color: inherit;
+  font-size: 0.86rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+
+.qr-action-btn,
+.tutorial-qr-btn {
+  white-space: nowrap;
+}
+
+.tutorial-qr-btn {
+  background: #143c32;
+  color: #fff;
+}
+
+.tutorial-qr-copy {
+  color: #4f5f55;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  margin: 0;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .qr-exercise-actions {
     grid-template-columns: 1fr;
   }
 }

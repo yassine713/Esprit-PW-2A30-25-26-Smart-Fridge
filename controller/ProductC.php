@@ -25,6 +25,11 @@ class ProductC
         return $this->model->listCategories($productId);
     }
 
+    public function listCategoriesForProductIds($productIds)
+    {
+        return $this->model->listCategoriesForProductIds($productIds);
+    }
+
     public function setCategories($productId, $categoryIds)
     {
         $this->model->setCategories($productId, $categoryIds);

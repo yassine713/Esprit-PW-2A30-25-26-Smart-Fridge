@@ -44,5 +44,10 @@ class MealC
     {
         return $this->model->listMealIngredients($mealId);
     }
+
+    public function listIngredientsForMealIds($mealIds)
+    {
+        return $this->model->listIngredientsForMealIds($mealIds);
+    }
 }
 ?>

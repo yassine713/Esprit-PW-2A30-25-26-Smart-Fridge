@@ -296,6 +296,7 @@ if (!function_exists('e')) {
             <form method="post" class="admin-form compact" novalidate>
               <input type="hidden" name="action" value="add_exercise" />
               <input type="text" name="name" placeholder="Exercise name" />
+              <input type="text" name="youtube_url" placeholder="YouTube Tutorial URL (optional)" />
               <button class="icon-btn" type="submit">Add</button>
             </form>
             <div class="admin-list">
@@ -305,6 +306,7 @@ if (!function_exists('e')) {
                     <input type="hidden" name="action" value="update_exercise" />
                     <input type="hidden" name="exercise_id" value="<?= e($ex['id']) ?>" />
                     <input type="text" name="name" value="<?= e($ex['name']) ?>" />
+                    <input type="text" name="youtube_url" value="<?= e($ex['youtube_url'] ?? '') ?>" placeholder="YouTube Tutorial URL (optional)" />
                     <button class="icon-btn" type="submit">Save</button>
                   </form>
                   <form method="post">

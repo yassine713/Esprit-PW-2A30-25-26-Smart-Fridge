@@ -212,10 +212,17 @@ class AdminPageController
                 $ingredientController->delete((int) ($_POST['ingredient_id'] ?? 0));
             }
             if ($action === 'add_exercise') {
-                $exerciseController->addExercise(trim($_POST['name'] ?? ''));
+                $exerciseController->addExercise(
+                    trim($_POST['name'] ?? ''),
+                    trim($_POST['youtube_url'] ?? '')
+                );
             }
             if ($action === 'update_exercise') {
-                $exerciseController->updateExercise((int) ($_POST['exercise_id'] ?? 0), trim($_POST['name'] ?? ''));
+                $exerciseController->updateExercise(
+                    (int) ($_POST['exercise_id'] ?? 0),
+                    trim($_POST['name'] ?? ''),
+                    trim($_POST['youtube_url'] ?? '')
+                );
             }
             if ($action === 'delete_exercise') {
                 $exerciseController->deleteExercise((int) ($_POST['exercise_id'] ?? 0));
@@ -308,8 +315,12 @@ class AdminPageController
         $requests = $supportController->listAll();
         $productCategoryIds = [];
         $productCategoryNames = [];
+        $productCategoriesById = $productController->listCategoriesForProductIds(array_map(
+            fn($product) => (int) $product['id'],
+            $products
+        ));
         foreach ($products as $product) {
-            $productCategories = $productController->listCategories($product['id']);
+            $productCategories = $productCategoriesById[(int) $product['id']] ?? [];
             $productCategoryIds[$product['id']] = array_map(fn($category) => $category['id'], $productCategories);
             $productCategoryNames[$product['id']] = array_map(fn($category) => $category['name'], $productCategories);
         }

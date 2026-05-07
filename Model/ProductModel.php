@@ -35,6 +35,41 @@ class ProductModel
         return $stmt->fetchAll();
     }
 
+    public function listCategoriesForProductIds($productIds)
+    {
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', (array) $productIds),
+            fn($productId) => $productId > 0
+        )));
+
+        $categoriesByProduct = [];
+        foreach ($productIds as $productId) {
+            $categoriesByProduct[$productId] = [];
+        }
+
+        if (!$productIds) {
+            return $categoriesByProduct;
+        }
+
+        $db = config::getConnexion();
+        $placeholders = implode(',', array_fill(0, count($productIds), '?'));
+        $sql = "SELECT p.id AS product_id, c.id, c.name
+                FROM product p
+                JOIN category c ON c.id = p.category_id
+                WHERE p.id IN ($placeholders)
+                ORDER BY p.id, c.name";
+        $stmt = $db->prepare($sql);
+        $stmt->execute($productIds);
+
+        foreach ($stmt->fetchAll() as $row) {
+            $productId = (int) $row['product_id'];
+            unset($row['product_id']);
+            $categoriesByProduct[$productId][] = $row;
+        }
+
+        return $categoriesByProduct;
+    }
+
     public function setCategories($productId, $categoryIds)
     {
         if ($productId <= 0) {

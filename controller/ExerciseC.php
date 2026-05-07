@@ -15,14 +15,29 @@ class ExerciseC
         return $this->model->listExercises();
     }
 
-    public function addExercise($name)
+    public function addExercise($name, $youtubeUrl = '')
     {
-        $this->model->addExercise($name);
+        $this->model->addExercise($name, $youtubeUrl);
     }
 
-    public function updateExercise($id, $name)
+    public function updateExercise($id, $name, $youtubeUrl = '')
     {
-        $this->model->updateExercise($id, $name);
+        $this->model->updateExercise($id, $name, $youtubeUrl);
+    }
+
+    public function saveYoutubeUrl($exerciseId, $youtubeUrl)
+    {
+        $this->model->saveYoutubeUrl($exerciseId, $youtubeUrl);
+    }
+
+    public function getYoutubeUrl($exerciseId)
+    {
+        return $this->model->getYoutubeUrl($exerciseId);
+    }
+
+    public function hasTutorial($exerciseId)
+    {
+        return $this->model->hasTutorial($exerciseId);
     }
 
     public function deleteExercise($id)

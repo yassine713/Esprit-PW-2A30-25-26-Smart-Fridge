@@ -101,6 +101,21 @@
     activeNavLink.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
+  const navTransitionTargets = new Set(['meals.php', 'exercises.php', 'store.php', 'profile.php', 'support.php']);
+  let isNavigating = false;
+
+  function pageNameFromUrl(url) {
+    const path = new URL(url, window.location.href).pathname;
+    return path.substring(path.lastIndexOf('/') + 1) || 'dashboard.php';
+  }
+
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    isNavigating = false;
+    document.body.classList.remove('is-page-navigating');
+    document.querySelectorAll('.is-nav-target').forEach((target) => target.classList.remove('is-nav-target'));
+  });
+
   const revealTargets = app.querySelectorAll(
     '.template-hero, .page-head, .wellness-hero, .stat, .insight-card, .card, .product-card, .reclamation, .exercise-smart-card, .support-footer'
   );
@@ -129,6 +144,26 @@
     if (!target || target.disabled) return;
     target.classList.add('is-pressed');
     window.setTimeout(() => target.classList.remove('is-pressed'), 180);
+  });
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('.sidebar .nav-link[href]');
+    if (!link || link.classList.contains('active') || link.classList.contains('portal-link')) return;
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.target && link.target !== '_self') return;
+
+    const destination = new URL(link.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    if (!navTransitionTargets.has(pageNameFromUrl(destination.href))) return;
+    if (isNavigating || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    event.preventDefault();
+    isNavigating = true;
+    link.classList.add('is-nav-target');
+    document.body.classList.add('is-page-navigating');
+    window.setTimeout(() => {
+      window.location.href = link.href;
+    }, 80);
   });
 
   const fieldLabels = Array.from(app.querySelectorAll('form label')).filter((label) => (
