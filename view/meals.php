@@ -17,7 +17,8 @@ $mealsPageController = new MealsPageController();
   'profileBudget' => $profileBudget,
   'aiMealSuggestions' => $aiMealSuggestions,
   'aiMealError' => $aiMealError,
-  'aiForm' => $aiForm
+  'aiForm' => $aiForm,
+  'mealFlash' => $mealFlash
 ] = $mealsPageController->handle($user);
 
 $isProteinSort = ($sort ?? '') === 'protein';
@@ -43,6 +44,9 @@ if (!function_exists('e')) {
     return htmlspecialchars((string) $value);
   }
 }
+
+$mealFlash = is_array($mealFlash ?? null) ? $mealFlash : [];
+$mealFlashAnalysis = is_array($mealFlash['aiAnalysis'] ?? null) ? $mealFlash['aiAnalysis'] : null;
 
 function meal_macro_summary($ingredients)
 {
@@ -352,6 +356,9 @@ function meal_placeholder_image_url($meal)
                 <button class="btn primary tiny" type="submit">Save Meal</button>
               </div>
             </div>
+            <?php if (!empty($mealFlash['error'])): ?>
+              <div class="meal-save-alert error" role="alert"><?= e($mealFlash['error']) ?></div>
+            <?php endif; ?>
 
             <div class="meal-composer-grid">
               <div class="meal-composer-fields">
@@ -375,7 +382,7 @@ function meal_placeholder_image_url($meal)
                 </div>
 
                 <div class="meal-builder">
-                  <span>Ingredients (optional)</span>
+                  <span>Ingredients (required)</span>
                   <div id="meal-ingredients-list" class="meal-builder-list">
                     <div class="meal-ingredient-grid meal-builder-row">
                       <select name="ingredient_id[]" id="meal-ingredient">
@@ -427,6 +434,62 @@ function meal_placeholder_image_url($meal)
             </div>
           </form>
         </section>
+
+        <?php if ($mealFlashAnalysis): ?>
+          <section class="card ai-score-card" aria-label="AI meal score">
+            <header class="ai-score-card-head">
+              <div>
+                <span>AI Meal Score<?= !empty($mealFlash['meal_name']) ? ' for ' . e($mealFlash['meal_name']) : '' ?></span>
+                <strong><?= e((int) ($mealFlashAnalysis['score'] ?? 0)) ?>/100 - <?= e($mealFlashAnalysis['score_label'] ?? 'Score') ?></strong>
+              </div>
+            </header>
+
+            <div class="ai-score-section">
+              <h4>Why this score?</h4>
+              <p><?= e($mealFlashAnalysis['reason'] ?? '') ?></p>
+            </div>
+
+            <div class="ai-score-grid">
+              <div>
+                <h4>Strengths</h4>
+                <ul>
+                  <?php foreach ((array) ($mealFlashAnalysis['strengths'] ?? []) as $item): ?>
+                    <li><?= e($item) ?></li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+              <div>
+                <h4>Needs improvement</h4>
+                <ul>
+                  <?php foreach ((array) ($mealFlashAnalysis['weaknesses'] ?? []) as $item): ?>
+                    <li><?= e($item) ?></li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+              <div>
+                <h4>Recommended changes</h4>
+                <ul>
+                  <?php foreach ((array) ($mealFlashAnalysis['recommended_changes'] ?? []) as $item): ?>
+                    <li><?= e($item) ?></li>
+                  <?php endforeach; ?>
+                </ul>
+              </div>
+            </div>
+
+            <div class="ai-score-feedback">
+              <div>
+                <h4>Budget feedback</h4>
+                <p><?= e($mealFlashAnalysis['budget_feedback'] ?? '') ?></p>
+              </div>
+              <div>
+                <h4>Goal feedback</h4>
+                <p><?= e($mealFlashAnalysis['goal_feedback'] ?? '') ?></p>
+              </div>
+            </div>
+          </section>
+        <?php elseif (!empty($mealFlash['aiError'])): ?>
+          <div class="ai-generator-alert meal-save-alert"><?= e($mealFlash['aiError']) ?></div>
+        <?php endif; ?>
 
         <?php
           $profileBudget = (float) ($profileBudget ?? 0);
@@ -790,6 +853,7 @@ function meal_placeholder_image_url($meal)
     form.addEventListener('submit', (e) => {
       let ok = true;
       const rows = ingredientsList.querySelectorAll('.meal-builder-row');
+      let validIngredientCount = 0;
       if (mealName.value.trim().length < 2) { setError('meal-name', 'Name must be at least 2 characters.'); ok = false; } else clearError('meal-name');
       if (mealType.value.trim().length < 2) { setError('meal-type', 'Type must be at least 2 characters.'); ok = false; } else clearError('meal-type');
       clearError('meal-qty');
@@ -798,12 +862,22 @@ function meal_placeholder_image_url($meal)
         const quantity = row.querySelector('input');
         const hasIngredient = ingredient.value !== '';
         const hasQuantity = quantity.value.trim() !== '';
+        const hasValidQuantity = /^[0-9]+(\.[0-9]+)?$/.test(quantity.value.trim()) && Number(quantity.value) > 0;
 
-        if ((hasIngredient || hasQuantity) && (ingredient.value === '' || !/^[0-9]+(\.[0-9]+)?$/.test(quantity.value.trim()) || Number(quantity.value) <= 0)) {
+        if (hasIngredient && hasValidQuantity) {
+          validIngredientCount += 1;
+          return;
+        }
+
+        if (hasIngredient || hasQuantity) {
           setError('meal-qty', 'Choose each ingredient and enter a valid quantity.');
           ok = false;
         }
       });
+      if (validIngredientCount === 0 && ok) {
+        setError('meal-qty', 'Please add at least one ingredient before saving this meal.');
+        ok = false;
+      }
       if (!ok) e.preventDefault();
     });
 

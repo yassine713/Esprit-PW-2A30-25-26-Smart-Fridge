@@ -2,6 +2,7 @@
 require_once __DIR__ . '/MealC.php';
 require_once __DIR__ . '/IngredientC.php';
 require_once __DIR__ . '/ProfileC.php';
+require_once __DIR__ . '/ExerciseC.php';
 
 class MealsPageController
 {
@@ -13,6 +14,7 @@ class MealsPageController
         $mealController = new MealC();
         $ingredientController = new IngredientC();
         $profileController = new ProfileC();
+        $exerciseController = new ExerciseC();
         $profile = $profileController->getByUserId($user['id']) ?: [];
         $availableIngredients = $ingredientController->listAll();
 
@@ -44,13 +46,46 @@ class MealsPageController
                     $quantities = [$quantities];
                 }
 
+                $ingredientError = '';
+                $mealIngredients = $this->readMealIngredientRows($ingredientIds, $quantities, $availableIngredients, $ingredientError);
+
+                if ($ingredientError !== '') {
+                    $this->storeMealFlash((int) $user['id'], ['error' => $ingredientError]);
+                    header('Location: ' . $redirectUrl);
+                    exit;
+                }
+
                 if ($name !== '' && $type !== '') {
                     $mealId = $mealController->addMeal($user['id'], $name, $type);
-                    foreach ($ingredientIds as $index => $ingredientId) {
-                        $quantity = $quantities[$index] ?? '';
-                        if ($ingredientId !== '' && is_numeric($quantity) && (float) $quantity > 0) {
-                            $mealController->addMealIngredient($mealId, (int) $ingredientId, (float) $quantity);
-                        }
+                    foreach ($mealIngredients as $ingredient) {
+                        $mealController->addMealIngredient($mealId, (int) $ingredient['id'], (float) $ingredient['quantity_g']);
+                    }
+
+                    $aiError = '';
+                    $analysis = $this->analyzeSavedMeal(
+                        ['id' => (int) $mealId, 'name' => $name, 'type' => $type, 'description' => ''],
+                        $mealIngredients,
+                        $profile,
+                        $user,
+                        $this->readUserObjectives($exerciseController, (int) $user['id']),
+                        $aiError
+                    );
+
+                    if ($analysis) {
+                        $mealController->updateMealAiAnalysis((int) $mealId, (int) $user['id'], $analysis);
+                        $this->storeMealFlash((int) $user['id'], [
+                            'success' => 'Meal saved successfully.',
+                            'meal_id' => (int) $mealId,
+                            'meal_name' => $name,
+                            'aiAnalysis' => $analysis
+                        ]);
+                    } else {
+                        $this->storeMealFlash((int) $user['id'], [
+                            'success' => 'Meal saved successfully.',
+                            'meal_id' => (int) $mealId,
+                            'meal_name' => $name,
+                            'aiError' => 'Meal saved, but AI analysis is temporarily unavailable.'
+                        ]);
                     }
                 }
 
@@ -137,6 +172,7 @@ class MealsPageController
             }
         }
 
+        $mealFlash = $this->readMealFlash((int) $user['id']);
         $storedAiState = $this->readAiMealState((int) $user['id']);
         if ($storedAiState !== null) {
             $aiForm = array_merge($aiForm, $storedAiState['form']);
@@ -181,8 +217,408 @@ class MealsPageController
             'profileBudget' => $profileBudget,
             'aiMealSuggestions' => $aiMealSuggestions,
             'aiMealError' => $aiMealError,
-            'aiForm' => $aiForm
+            'aiForm' => $aiForm,
+            'mealFlash' => $mealFlash
         ];
+    }
+
+    private function readMealIngredientRows($ingredientIds, $quantities, $availableIngredients, &$error)
+    {
+        $error = '';
+        $ingredientMap = $this->indexIngredientsById($availableIngredients);
+        $ingredientIds = array_values((array) $ingredientIds);
+        $quantities = array_values((array) $quantities);
+        $rowCount = max(count($ingredientIds), count($quantities));
+        $rows = [];
+
+        for ($index = 0; $index < $rowCount; $index++) {
+            $ingredientIdText = trim((string) ($ingredientIds[$index] ?? ''));
+            $quantityText = trim((string) ($quantities[$index] ?? ''));
+
+            if ($ingredientIdText === '' && $quantityText === '') {
+                continue;
+            }
+
+            if (!preg_match('/^\d+$/', $ingredientIdText)
+                || !isset($ingredientMap[(int) $ingredientIdText])
+                || !$this->isPositiveMealQuantity($quantityText)
+            ) {
+                $error = 'Choose each ingredient and enter a valid quantity.';
+                return [];
+            }
+
+            $ingredient = $ingredientMap[(int) $ingredientIdText];
+            $rows[] = [
+                'id' => (int) $ingredient['id'],
+                'name' => (string) ($ingredient['name'] ?? ''),
+                'quantity_g' => (float) $quantityText,
+                'calories' => (float) ($ingredient['calories'] ?? 0),
+                'protein' => (float) ($ingredient['protein'] ?? 0),
+                'carbs' => (float) ($ingredient['carbs'] ?? 0),
+                'fat' => (float) ($ingredient['fat'] ?? 0),
+                'price' => (float) ($ingredient['price'] ?? 0),
+                'nutrition_complete' => $this->ingredientHasNutritionData($ingredient)
+            ];
+        }
+
+        if (!$rows) {
+            $error = 'Please add at least one ingredient before saving this meal.';
+        }
+
+        return $rows;
+    }
+
+    private function indexIngredientsById($ingredients)
+    {
+        $map = [];
+        foreach ($ingredients as $ingredient) {
+            $id = (int) ($ingredient['id'] ?? 0);
+            if ($id > 0) {
+                $map[$id] = $ingredient;
+            }
+        }
+
+        return $map;
+    }
+
+    private function isPositiveMealQuantity($value)
+    {
+        $value = trim((string) $value);
+        if (!preg_match('/^\d+(\.\d+)?$/', $value)) {
+            return false;
+        }
+
+        $quantity = (float) $value;
+        return $quantity > 0 && $quantity <= 999999.99;
+    }
+
+    private function ingredientHasNutritionData($ingredient)
+    {
+        foreach (['calories', 'protein', 'carbs', 'fat', 'price'] as $field) {
+            if (!array_key_exists($field, $ingredient) || $ingredient[$field] === null || $ingredient[$field] === '') {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function readUserObjectives($exerciseController, $userId)
+    {
+        try {
+            return array_slice($exerciseController->listObjectivesByUser($userId), 0, 5);
+        } catch (Exception $e) {
+            return [];
+        }
+    }
+
+    private function getMealFlashSessionKey($userId)
+    {
+        return 'nutribudget_meal_flash_' . (int) $userId;
+    }
+
+    private function storeMealFlash($userId, $data)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return;
+        }
+
+        $_SESSION[$this->getMealFlashSessionKey($userId)] = array_merge((array) $data, [
+            'created_at' => time()
+        ]);
+    }
+
+    private function readMealFlash($userId)
+    {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            return [];
+        }
+
+        $key = $this->getMealFlashSessionKey($userId);
+        $flash = $_SESSION[$key] ?? [];
+        unset($_SESSION[$key]);
+
+        if (!is_array($flash)) {
+            return [];
+        }
+
+        $createdAt = (int) ($flash['created_at'] ?? 0);
+        if ($createdAt > 0 && ($createdAt + 600) < time()) {
+            return [];
+        }
+
+        unset($flash['created_at']);
+        return $flash;
+    }
+
+    private function analyzeSavedMeal($meal, $ingredients, $profile, $user, $objectives, &$error)
+    {
+        $error = '';
+        $responseText = $this->callGeminiForMealAnalysis($meal, $ingredients, $profile, $user, $objectives, $error);
+        if ($responseText === '') {
+            return [];
+        }
+
+        $data = $this->decodeGeminiJson($responseText);
+        $analysis = $this->normalizeMealAiAnalysis($data);
+        if (!$analysis) {
+            $error = 'Gemini returned an invalid meal analysis.';
+            return [];
+        }
+
+        return $analysis;
+    }
+
+    private function callGeminiForMealAnalysis($meal, $ingredients, $profile, $user, $objectives, &$error)
+    {
+        $apiKey = defined('GEMINI_API_KEY') && GEMINI_API_KEY !== ''
+            ? GEMINI_API_KEY
+            : (getenv('GEMINI_API_KEY') ?: '');
+
+        if ($apiKey === '') {
+            $error = 'Gemini API key is missing.';
+            return '';
+        }
+
+        $ingredientMap = $this->indexIngredientsById($ingredients);
+        $summary = $this->summarizeAiMealItems($ingredients, $ingredientMap);
+        $nutritionComplete = count(array_filter($ingredients, fn($ingredient) => empty($ingredient['nutrition_complete']))) === 0;
+        $ingredientLines = array_map(function ($ingredient) {
+            return sprintf(
+                '- %s: %.1fg, %.1f kcal/100g, %.1fg protein/100g, %.1fg carbs/100g, %.1fg fat/100g, %.2f price/100g',
+                $ingredient['name'],
+                (float) ($ingredient['quantity_g'] ?? 0),
+                (float) ($ingredient['calories'] ?? 0),
+                (float) ($ingredient['protein'] ?? 0),
+                (float) ($ingredient['carbs'] ?? 0),
+                (float) ($ingredient['fat'] ?? 0),
+                (float) ($ingredient['price'] ?? 0)
+            );
+        }, $ingredients);
+
+        $objectiveLines = [];
+        foreach ($objectives as $objective) {
+            $objectiveLines[] = sprintf(
+                '- %s (%s, %s minutes, %s)',
+                trim((string) ($objective['title'] ?? 'Objective')),
+                trim((string) ($objective['exercise_name'] ?? 'exercise')),
+                (int) ($objective['target_duration_min'] ?? 0),
+                trim((string) ($objective['status'] ?? 'active'))
+            );
+        }
+
+        $prompt = implode("\n", [
+            'Analyze this NutriBudget custom meal after it was saved.',
+            'Return only valid JSON. Do not include markdown or text outside JSON.',
+            'Score out of 100 using this guide: 25 points matches user goal, 20 points ingredient balance, 20 points budget friendly, 15 points protein/energy quality, 10 points vegetables/fiber/micronutrients, 10 points low excessive sugar/fat/salt.',
+            'If nutrition data is incomplete or based only on ingredient estimates, clearly say the score is estimated. Do not claim exact calories unless exact data is available.',
+            'Focus on budget, goal compatibility, ingredient quality, balance, protein, vegetables, sugar/fat/salt level, and overall usefulness.',
+            'Meal name: ' . trim((string) ($meal['name'] ?? '')),
+            'Meal type: ' . trim((string) ($meal['type'] ?? '')),
+            'Meal description: ' . (trim((string) ($meal['description'] ?? '')) ?: 'not available'),
+            'Ingredients and quantities:',
+            implode("\n", $ingredientLines),
+            'Estimated totals from the ingredient table: ' . sprintf(
+                '%d kcal, %.1fg protein, %.1fg carbs, %.1fg fat, %.2f cost',
+                (int) $summary['calories'],
+                (float) $summary['protein'],
+                (float) $summary['carbs'],
+                (float) $summary['fat'],
+                (float) $summary['cost']
+            ),
+            'Nutrition and price data complete: ' . ($nutritionComplete ? 'yes' : 'no'),
+            'User goal: ' . (trim((string) ($profile['goal'] ?? '')) ?: 'not specified'),
+            'User budget: ' . number_format((float) ($profile['budget'] ?? 0), 2),
+            'User weight kg: ' . (trim((string) ($profile['weight'] ?? '')) ?: 'not specified'),
+            'User height cm: ' . (trim((string) ($profile['height'] ?? '')) ?: 'not specified'),
+            'Health conditions: ' . (trim((string) ($profile['disease'] ?? '')) ?: 'none specified'),
+            'Allergies: ' . (trim((string) ($profile['allergy'] ?? '')) ?: 'none specified'),
+            'Fitness objectives:',
+            $objectiveLines ? implode("\n", $objectiveLines) : 'none specified',
+            'User name: ' . (trim((string) ($user['name'] ?? '')) ?: 'not specified')
+        ]);
+
+        $schema = [
+            'type' => 'object',
+            'properties' => [
+                'score' => ['type' => 'integer'],
+                'score_label' => ['type' => 'string'],
+                'reason' => ['type' => 'string'],
+                'strengths' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string']
+                ],
+                'weaknesses' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string']
+                ],
+                'recommended_changes' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string']
+                ],
+                'budget_feedback' => ['type' => 'string'],
+                'goal_feedback' => ['type' => 'string']
+            ],
+            'required' => [
+                'score',
+                'score_label',
+                'reason',
+                'strengths',
+                'weaknesses',
+                'recommended_changes',
+                'budget_feedback',
+                'goal_feedback'
+            ]
+        ];
+
+        $body = json_encode([
+            'contents' => [[
+                'parts' => [[
+                    'text' => $prompt
+                ]]
+            ]],
+            'generationConfig' => [
+                'temperature' => 0.25,
+                'responseMimeType' => 'application/json',
+                'responseSchema' => $schema
+            ]
+        ]);
+
+        $lastMessage = 'Gemini could not analyze the meal right now.';
+        foreach ($this->getGeminiModels() as $model) {
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
+            $transportError = '';
+            $response = $this->postJson($url, $body, [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $apiKey
+            ], $status, $transportError);
+
+            if ($response !== '' && $status >= 200 && $status < 300) {
+                $data = json_decode($response, true);
+                $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+                if ($text === '') {
+                    $error = 'Gemini returned an empty response.';
+                }
+
+                return $text;
+            }
+
+            $message = 'Gemini could not analyze the meal right now.';
+            $data = json_decode($response, true);
+            if (isset($data['error']['message'])) {
+                $message = $data['error']['message'];
+            } elseif ($transportError !== '') {
+                $message = 'Gemini request failed: ' . $transportError;
+            } elseif ($status > 0) {
+                $message = 'Gemini request failed with HTTP status ' . $status . '.';
+            }
+
+            $lastMessage = $message;
+            if (!$this->shouldRetryGeminiModel($status, $message, $transportError)) {
+                break;
+            }
+        }
+
+        $error = $lastMessage;
+        return '';
+    }
+
+    private function normalizeMealAiAnalysis($data)
+    {
+        if (!is_array($data) || !isset($data['score']) || !is_numeric($data['score'])) {
+            return [];
+        }
+
+        $score = max(0, min(100, (int) round((float) $data['score'])));
+        $scoreLabel = $this->cleanAiText($data['score_label'] ?? '', 50);
+        if ($scoreLabel === '') {
+            $scoreLabel = $this->scoreLabelFor($score);
+        }
+
+        return [
+            'score' => $score,
+            'score_label' => $scoreLabel,
+            'reason' => $this->cleanAiText($data['reason'] ?? 'Gemini did not provide a detailed reason.', 1200),
+            'strengths' => $this->cleanAiList($data['strengths'] ?? [], 'No clear strengths were returned.'),
+            'weaknesses' => $this->cleanAiList($data['weaknesses'] ?? [], 'No specific weaknesses were returned.'),
+            'recommended_changes' => $this->cleanAiList($data['recommended_changes'] ?? [], 'No recommended changes were returned.'),
+            'budget_feedback' => $this->cleanAiText($data['budget_feedback'] ?? 'Budget feedback was not returned.', 800),
+            'goal_feedback' => $this->cleanAiText($data['goal_feedback'] ?? 'Goal feedback was not returned.', 800)
+        ];
+    }
+
+    private function scoreLabelFor($score)
+    {
+        if ($score >= 85) {
+            return 'Excellent';
+        }
+        if ($score >= 70) {
+            return 'Good';
+        }
+        if ($score >= 50) {
+            return 'Fair';
+        }
+
+        return 'Needs improvement';
+    }
+
+    private function cleanAiList($value, $fallback)
+    {
+        $items = [];
+        foreach ((array) $value as $item) {
+            $item = $this->cleanAiText($item, 220);
+            if ($item !== '') {
+                $items[] = $item;
+            }
+
+            if (count($items) >= 6) {
+                break;
+            }
+        }
+
+        return $items ?: [$fallback];
+    }
+
+    private function cleanAiText($value, $maxLength)
+    {
+        if (is_array($value)) {
+            $value = implode(' ', array_filter(array_map(function ($item) {
+                return is_scalar($item) ? (string) $item : '';
+            }, $value)));
+        } elseif (!is_scalar($value) && $value !== null) {
+            $value = '';
+        }
+
+        $value = trim(strip_tags((string) $value));
+        $value = preg_replace('/\s+/', ' ', $value);
+        if (strlen($value) > $maxLength) {
+            $value = rtrim(substr($value, 0, $maxLength - 3)) . '...';
+        }
+
+        return $value;
+    }
+
+    private function decodeGeminiJson($text)
+    {
+        $text = trim((string) $text);
+        $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+        $text = preg_replace('/\s*```$/', '', $text);
+
+        $data = json_decode($text, true);
+        if (is_array($data)) {
+            return $data;
+        }
+
+        $start = strpos($text, '{');
+        $end = strrpos($text, '}');
+        if ($start !== false && $end !== false && $end > $start) {
+            $data = json_decode(substr($text, $start, $end - $start + 1), true);
+            if (is_array($data)) {
+                return $data;
+            }
+        }
+
+        return [];
     }
 
     private function readAiGeneratorForm($profileBudget)

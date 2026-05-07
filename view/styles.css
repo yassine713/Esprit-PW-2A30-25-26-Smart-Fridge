@@ -6209,6 +6209,105 @@ body.is-page-navigating .app[data-view="dashboard"]:not([data-page="home"]) .con
   padding: 12px 14px;
 }
 
+.app[data-page="meals"] .meal-save-alert {
+  margin: 0 0 16px;
+}
+
+.app[data-page="meals"] .meal-save-alert.error {
+  background: #fff5f5;
+  border: 1px solid #ffc4c4;
+  border-radius: 8px;
+  color: #a72020;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 12px 14px;
+}
+
+.app[data-page="meals"] .ai-score-card {
+  border: 1px solid #dce5df;
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.app[data-page="meals"] .ai-score-card-head {
+  align-items: center;
+  background: linear-gradient(135deg, #edf8f2, #ffffff);
+  border: 1px solid #d7e7dd;
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.app[data-page="meals"] .ai-score-card-head span {
+  color: #0b7d4b;
+  display: block;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.app[data-page="meals"] .ai-score-card-head strong {
+  color: #111827;
+  display: block;
+  font-size: clamp(24px, 3vw, 34px);
+  line-height: 1;
+  margin-top: 5px;
+}
+
+.app[data-page="meals"] .ai-score-section,
+.app[data-page="meals"] .ai-score-grid > div,
+.app[data-page="meals"] .ai-score-feedback > div {
+  background: #fbfdfb;
+  border: 1px solid #e0e8e3;
+  border-radius: 8px;
+  padding: 13px;
+}
+
+.app[data-page="meals"] .ai-score-section h4,
+.app[data-page="meals"] .ai-score-grid h4,
+.app[data-page="meals"] .ai-score-feedback h4 {
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 900;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+}
+
+.app[data-page="meals"] .ai-score-section p,
+.app[data-page="meals"] .ai-score-feedback p {
+  color: #4f5f55;
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.app[data-page="meals"] .ai-score-grid,
+.app[data-page="meals"] .ai-score-feedback {
+  display: grid;
+  gap: 12px;
+}
+
+.app[data-page="meals"] .ai-score-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.app[data-page="meals"] .ai-score-feedback {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.app[data-page="meals"] .ai-score-grid ul {
+  color: #4f5f55;
+  display: grid;
+  font-size: 13px;
+  gap: 5px;
+  line-height: 1.4;
+  margin: 0;
+  padding-left: 18px;
+}
+
 .app[data-page="meals"] .ai-results-panel {
   margin: 0 auto 16px;
   max-width: 1180px;
@@ -6302,6 +6401,11 @@ body.is-page-navigating .app[data-view="dashboard"]:not([data-page="home"]) .con
 
 @media (max-width: 1080px) {
   .app[data-page="meals"] .ai-generated-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app[data-page="meals"] .ai-score-grid,
+  .app[data-page="meals"] .ai-score-feedback {
     grid-template-columns: 1fr;
   }
 }

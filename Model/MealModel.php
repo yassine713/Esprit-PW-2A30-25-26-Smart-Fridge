@@ -3,6 +3,8 @@ require_once __DIR__ . '/../config.php';
 
 class MealModel
 {
+    private $customMealColumns = null;
+
     public function listByUser($userId)
     {
         $db = config::getConnexion();
@@ -17,6 +19,50 @@ class MealModel
         $stmt = $db->prepare('INSERT INTO custom_meal (user_id, name, type) VALUES (:uid, :name, :type)');
         $stmt->execute(['uid' => $userId, 'name' => $name, 'type' => $type]);
         return $db->lastInsertId();
+    }
+
+    public function updateMealAiAnalysis($mealId, $userId, $analysis)
+    {
+        $db = config::getConnexion();
+        $analysis = is_array($analysis) ? $analysis : [];
+        $optionalColumns = [
+            'ai_score' => 'score',
+            'ai_score_label' => 'score_label',
+            'ai_score_reason' => 'reason',
+            'ai_strengths' => 'strengths',
+            'ai_weaknesses' => 'weaknesses',
+            'ai_recommended_changes' => 'recommended_changes',
+            'ai_budget_feedback' => 'budget_feedback',
+            'ai_goal_feedback' => 'goal_feedback'
+        ];
+
+        $sets = [];
+        $params = [
+            'id' => (int) $mealId,
+            'uid' => (int) $userId
+        ];
+
+        foreach ($optionalColumns as $column => $dataKey) {
+            if (!array_key_exists($dataKey, $analysis) || !$this->customMealHasColumn($column)) {
+                continue;
+            }
+
+            $sets[] = '`' . $column . '` = :' . $column;
+            $params[$column] = is_array($analysis[$dataKey])
+                ? json_encode(array_values($analysis[$dataKey]), JSON_UNESCAPED_UNICODE)
+                : $analysis[$dataKey];
+        }
+
+        if ($this->customMealHasColumn('ai_analyzed_at')) {
+            $sets[] = '`ai_analyzed_at` = NOW()';
+        }
+
+        if (!$sets) {
+            return;
+        }
+
+        $stmt = $db->prepare('UPDATE custom_meal SET ' . implode(', ', $sets) . ' WHERE id = :id AND user_id = :uid');
+        $stmt->execute($params);
     }
 
     public function updateMeal($mealId, $userId, $name, $type)
@@ -142,6 +188,40 @@ class MealModel
         }
 
         return $ingredientsByMeal;
+    }
+
+    private function customMealHasColumn($column)
+    {
+        $allowedColumns = [
+            'ai_score' => true,
+            'ai_score_label' => true,
+            'ai_score_reason' => true,
+            'ai_strengths' => true,
+            'ai_weaknesses' => true,
+            'ai_recommended_changes' => true,
+            'ai_budget_feedback' => true,
+            'ai_goal_feedback' => true,
+            'ai_analyzed_at' => true
+        ];
+
+        if (!isset($allowedColumns[$column])) {
+            return false;
+        }
+
+        if ($this->customMealColumns === null) {
+            try {
+                $db = config::getConnexion();
+                $stmt = $db->query('SHOW COLUMNS FROM custom_meal');
+                $this->customMealColumns = [];
+                foreach ($stmt->fetchAll() as $row) {
+                    $this->customMealColumns[$row['Field']] = true;
+                }
+            } catch (Exception $e) {
+                $this->customMealColumns = [];
+            }
+        }
+
+        return isset($this->customMealColumns[$column]);
     }
 }
 ?>

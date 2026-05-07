@@ -20,6 +20,11 @@ class MealC
         return $this->model->addMeal($userId, $name, $type);
     }
 
+    public function updateMealAiAnalysis($mealId, $userId, $analysis)
+    {
+        $this->model->updateMealAiAnalysis($mealId, $userId, $analysis);
+    }
+
     public function updateMeal($mealId, $userId, $name, $type)
     {
         $this->model->updateMeal($mealId, $userId, $name, $type);
