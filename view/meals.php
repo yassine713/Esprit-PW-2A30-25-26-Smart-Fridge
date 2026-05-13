@@ -25,6 +25,9 @@ $isProteinSort = ($sort ?? '') === 'protein';
 $organizeHref = $isProteinSort ? 'meals.php' : 'meals.php?sort=protein&dir=desc';
 $organizeLabel = $isProteinSort ? 'Clear' : 'Organize';
 $isLoadingVideos = ($_GET['load_videos'] ?? '1') !== '0';
+$loadVideosParams = $isProteinSort ? ['sort' => $sort, 'dir' => $dir] : [];
+$loadVideosParams['load_videos'] = '1';
+$loadVideosHref = 'meals.php?' . http_build_query($loadVideosParams);
 $totalProteinG = array_sum($mealProteinMap);
 $averageProteinG = count($meals) > 0 ? $totalProteinG / count($meals) : 0;
 $mealVideoError = '';
@@ -435,41 +438,46 @@ function meal_placeholder_image_url($meal)
           </form>
         </section>
 
-        <?php if ($mealFlashAnalysis): ?>
-          <section class="card ai-score-card" aria-label="AI meal score">
+        <?php if ($mealFlashAnalysis || (!empty($mealFlash['aiPending']) && !empty($mealFlash['meal_id']))): ?>
+          <section
+            class="card ai-score-card"
+            id="ai-score-card"
+            aria-label="AI meal score"
+            <?php if (!$mealFlashAnalysis): ?>
+              data-pending-analysis="1"
+              data-meal-id="<?= e($mealFlash['meal_id']) ?>"
+            <?php endif; ?>>
             <header class="ai-score-card-head">
               <div>
-                <span>AI Meal Score<?= !empty($mealFlash['meal_name']) ? ' for ' . e($mealFlash['meal_name']) : '' ?></span>
-                <strong><?= e((int) ($mealFlashAnalysis['score'] ?? 0)) ?>/100 - <?= e($mealFlashAnalysis['score_label'] ?? 'Score') ?></strong>
+                <span>Score<?= !empty($mealFlash['meal_name']) ? ' for ' . e($mealFlash['meal_name']) : '' ?></span>
+                <strong data-ai-score-heading>
+                  <?php if ($mealFlashAnalysis): ?>
+                    <?= e((int) ($mealFlashAnalysis['score'] ?? 0)) ?>/100 - <?= e($mealFlashAnalysis['label'] ?? 'Score') ?>
+                  <?php else: ?>
+                    Analyzing...
+                  <?php endif; ?>
+                </strong>
               </div>
             </header>
 
             <div class="ai-score-section">
-              <h4>Why this score?</h4>
-              <p><?= e($mealFlashAnalysis['reason'] ?? '') ?></p>
+              <h4>Reason</h4>
+              <p data-ai-reason><?= e($mealFlashAnalysis['reason'] ?? 'Meal saved. Checking score...') ?></p>
             </div>
 
             <div class="ai-score-grid">
               <div>
-                <h4>Strengths</h4>
-                <ul>
-                  <?php foreach ((array) ($mealFlashAnalysis['strengths'] ?? []) as $item): ?>
+                <h4>Good</h4>
+                <ul data-ai-good>
+                  <?php foreach ((array) ($mealFlashAnalysis['good'] ?? []) as $item): ?>
                     <li><?= e($item) ?></li>
                   <?php endforeach; ?>
                 </ul>
               </div>
               <div>
-                <h4>Needs improvement</h4>
-                <ul>
-                  <?php foreach ((array) ($mealFlashAnalysis['weaknesses'] ?? []) as $item): ?>
-                    <li><?= e($item) ?></li>
-                  <?php endforeach; ?>
-                </ul>
-              </div>
-              <div>
-                <h4>Recommended changes</h4>
-                <ul>
-                  <?php foreach ((array) ($mealFlashAnalysis['recommended_changes'] ?? []) as $item): ?>
+                <h4>Improve</h4>
+                <ul data-ai-improve>
+                  <?php foreach ((array) ($mealFlashAnalysis['improve'] ?? []) as $item): ?>
                     <li><?= e($item) ?></li>
                   <?php endforeach; ?>
                 </ul>
@@ -478,12 +486,12 @@ function meal_placeholder_image_url($meal)
 
             <div class="ai-score-feedback">
               <div>
-                <h4>Budget feedback</h4>
-                <p><?= e($mealFlashAnalysis['budget_feedback'] ?? '') ?></p>
+                <h4>Budget</h4>
+                <p data-ai-budget><?= e($mealFlashAnalysis['budget'] ?? '') ?></p>
               </div>
               <div>
-                <h4>Goal feedback</h4>
-                <p><?= e($mealFlashAnalysis['goal_feedback'] ?? '') ?></p>
+                <h4>Goal</h4>
+                <p data-ai-goal><?= e($mealFlashAnalysis['goal'] ?? '') ?></p>
               </div>
             </div>
           </section>
@@ -636,6 +644,9 @@ function meal_placeholder_image_url($meal)
                 </svg>
                 <span><?= e($organizeLabel) ?></span>
               </a>
+              <?php if (!$isLoadingVideos): ?>
+                <a class="btn soft tiny" href="<?= e($loadVideosHref) ?>">Load cooking videos</a>
+              <?php endif; ?>
               <a class="btn primary tiny" href="#meal-form">Add Meal</a>
             </div>
           </div>
@@ -1008,6 +1019,73 @@ function meal_placeholder_image_url($meal)
           closeAiResults();
         }
       });
+    }
+
+    const aiScoreCard = document.getElementById('ai-score-card');
+    if (aiScoreCard && aiScoreCard.dataset.pendingAnalysis === '1') {
+      const scoreHeading = aiScoreCard.querySelector('[data-ai-score-heading]');
+      const reason = aiScoreCard.querySelector('[data-ai-reason]');
+      const goodList = aiScoreCard.querySelector('[data-ai-good]');
+      const improveList = aiScoreCard.querySelector('[data-ai-improve]');
+      const budget = aiScoreCard.querySelector('[data-ai-budget]');
+      const goal = aiScoreCard.querySelector('[data-ai-goal]');
+      const unavailableMessage = 'Meal saved, but AI analysis is temporarily unavailable.';
+
+      const renderList = (target, items) => {
+        if (!target) return;
+        target.textContent = '';
+        (Array.isArray(items) ? items.slice(0, 2) : []).forEach((item) => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          target.appendChild(li);
+        });
+      };
+
+      const renderUnavailable = () => {
+        if (scoreHeading) scoreHeading.textContent = 'Unavailable';
+        if (reason) reason.textContent = unavailableMessage;
+        renderList(goodList, []);
+        renderList(improveList, []);
+        if (budget) budget.textContent = '';
+        if (goal) goal.textContent = '';
+      };
+
+      const formData = new FormData();
+      formData.append('action', 'analyze_meal');
+      formData.append('meal_id', aiScoreCard.dataset.mealId || '');
+
+      const controller = 'AbortController' in window ? new AbortController() : null;
+      const timeoutId = window.setTimeout(() => {
+        if (controller) controller.abort();
+        renderUnavailable();
+      }, 35000);
+
+      fetch('meals.php', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin',
+        signal: controller ? controller.signal : undefined
+      })
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('AI unavailable')))
+        .then((payload) => {
+          window.clearTimeout(timeoutId);
+          if (!payload || !payload.success || !payload.analysis) {
+            renderUnavailable();
+            return;
+          }
+
+          const analysis = payload.analysis;
+          if (scoreHeading) scoreHeading.textContent = `${analysis.score}/100 - ${analysis.label}`;
+          if (reason) reason.textContent = analysis.reason || '';
+          renderList(goodList, analysis.good);
+          renderList(improveList, analysis.improve);
+          if (budget) budget.textContent = analysis.budget || '';
+          if (goal) goal.textContent = analysis.goal || '';
+        })
+        .catch(() => {
+          window.clearTimeout(timeoutId);
+          renderUnavailable();
+        });
     }
   </script>
   <script src="user-panel.js"></script>

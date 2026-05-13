@@ -15,6 +15,11 @@ class MealC
         return $this->model->listByUser($userId);
     }
 
+    public function getMealForUser($mealId, $userId)
+    {
+        return $this->model->getMealForUser($mealId, $userId);
+    }
+
     public function addMeal($userId, $name, $type)
     {
         return $this->model->addMeal($userId, $name, $type);
@@ -53,6 +58,11 @@ class MealC
     public function listMealIngredients($mealId)
     {
         return $this->model->listMealIngredients($mealId);
+    }
+
+    public function listMealIngredientsForUser($mealId, $userId)
+    {
+        return $this->model->listMealIngredientsForUser($mealId, $userId);
     }
 
     public function listIngredientsForMealIds($mealIds)

@@ -13,6 +13,14 @@ class MealModel
         return $stmt->fetchAll();
     }
 
+    public function getMealForUser($mealId, $userId)
+    {
+        $db = config::getConnexion();
+        $stmt = $db->prepare('SELECT * FROM custom_meal WHERE id = :id AND user_id = :uid LIMIT 1');
+        $stmt->execute(['id' => (int) $mealId, 'uid' => (int) $userId]);
+        return $stmt->fetch() ?: null;
+    }
+
     public function addMeal($userId, $name, $type)
     {
         $db = config::getConnexion();
@@ -27,13 +35,13 @@ class MealModel
         $analysis = is_array($analysis) ? $analysis : [];
         $optionalColumns = [
             'ai_score' => 'score',
-            'ai_score_label' => 'score_label',
+            'ai_score_label' => 'label',
             'ai_score_reason' => 'reason',
-            'ai_strengths' => 'strengths',
-            'ai_weaknesses' => 'weaknesses',
-            'ai_recommended_changes' => 'recommended_changes',
-            'ai_budget_feedback' => 'budget_feedback',
-            'ai_goal_feedback' => 'goal_feedback'
+            'ai_strengths' => 'good',
+            'ai_weaknesses' => 'improve',
+            'ai_recommended_changes' => 'improve',
+            'ai_budget_feedback' => 'budget',
+            'ai_goal_feedback' => 'goal'
         ];
 
         $sets = [];
@@ -152,6 +160,20 @@ class MealModel
                 WHERE mi.meal_id = :mid';
         $stmt = $db->prepare($sql);
         $stmt->execute(['mid' => $mealId]);
+        return $stmt->fetchAll();
+    }
+
+    public function listMealIngredientsForUser($mealId, $userId)
+    {
+        $db = config::getConnexion();
+        $sql = 'SELECT mi.id, mi.quantity_g, i.name, i.calories, i.protein, i.carbs, i.fat, i.price
+                FROM meal_ingredient mi
+                JOIN custom_meal cm ON cm.id = mi.meal_id
+                JOIN ingredient i ON i.id = mi.ingredient_id
+                WHERE mi.meal_id = :mid AND cm.user_id = :uid
+                ORDER BY mi.id';
+        $stmt = $db->prepare($sql);
+        $stmt->execute(['mid' => (int) $mealId, 'uid' => (int) $userId]);
         return $stmt->fetchAll();
     }
 

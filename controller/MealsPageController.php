@@ -2,7 +2,6 @@
 require_once __DIR__ . '/MealC.php';
 require_once __DIR__ . '/IngredientC.php';
 require_once __DIR__ . '/ProfileC.php';
-require_once __DIR__ . '/ExerciseC.php';
 
 class MealsPageController
 {
@@ -14,7 +13,6 @@ class MealsPageController
         $mealController = new MealC();
         $ingredientController = new IngredientC();
         $profileController = new ProfileC();
-        $exerciseController = new ExerciseC();
         $profile = $profileController->getByUserId($user['id']) ?: [];
         $availableIngredients = $ingredientController->listAll();
 
@@ -33,6 +31,12 @@ class MealsPageController
 
         if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $action = $_POST['action'] ?? '';
+
+            if ($action === 'analyze_meal') {
+                $this->handleMealAnalysisRequest($mealController, (int) $user['id'], $profile);
+                exit;
+            }
+
             if ($action === 'add_meal') {
                 $name = trim($_POST['meal_name'] ?? '');
                 $type = trim($_POST['meal_type'] ?? '');
@@ -61,35 +65,15 @@ class MealsPageController
                         $mealController->addMealIngredient($mealId, (int) $ingredient['id'], (float) $ingredient['quantity_g']);
                     }
 
-                    $aiError = '';
-                    $analysis = $this->analyzeSavedMeal(
-                        ['id' => (int) $mealId, 'name' => $name, 'type' => $type, 'description' => ''],
-                        $mealIngredients,
-                        $profile,
-                        $user,
-                        $this->readUserObjectives($exerciseController, (int) $user['id']),
-                        $aiError
-                    );
-
-                    if ($analysis) {
-                        $mealController->updateMealAiAnalysis((int) $mealId, (int) $user['id'], $analysis);
-                        $this->storeMealFlash((int) $user['id'], [
-                            'success' => 'Meal saved successfully.',
-                            'meal_id' => (int) $mealId,
-                            'meal_name' => $name,
-                            'aiAnalysis' => $analysis
-                        ]);
-                    } else {
-                        $this->storeMealFlash((int) $user['id'], [
-                            'success' => 'Meal saved successfully.',
-                            'meal_id' => (int) $mealId,
-                            'meal_name' => $name,
-                            'aiError' => 'Meal saved, but AI analysis is temporarily unavailable.'
-                        ]);
-                    }
+                    $this->storeMealFlash((int) $user['id'], [
+                        'success' => 'Meal saved successfully.',
+                        'meal_id' => (int) $mealId,
+                        'meal_name' => $name,
+                        'aiPending' => true
+                    ]);
                 }
 
-                header('Location: ' . $redirectUrl);
+                header('Location: ' . $this->buildFastMealsRedirectUrl($redirectUrl));
                 exit;
             }
 
@@ -303,15 +287,6 @@ class MealsPageController
         return true;
     }
 
-    private function readUserObjectives($exerciseController, $userId)
-    {
-        try {
-            return array_slice($exerciseController->listObjectivesByUser($userId), 0, 5);
-        } catch (Exception $e) {
-            return [];
-        }
-    }
-
     private function getMealFlashSessionKey($userId)
     {
         return 'nutribudget_meal_flash_' . (int) $userId;
@@ -351,10 +326,10 @@ class MealsPageController
         return $flash;
     }
 
-    private function analyzeSavedMeal($meal, $ingredients, $profile, $user, $objectives, &$error)
+    private function analyzeSavedMeal($meal, $ingredients, $profile, &$error)
     {
         $error = '';
-        $responseText = $this->callGeminiForMealAnalysis($meal, $ingredients, $profile, $user, $objectives, $error);
+        $responseText = $this->callGeminiForMealAnalysis($meal, $ingredients, $profile, $error);
         if ($responseText === '') {
             return [];
         }
@@ -369,7 +344,158 @@ class MealsPageController
         return $analysis;
     }
 
-    private function callGeminiForMealAnalysis($meal, $ingredients, $profile, $user, $objectives, &$error)
+    private function handleMealAnalysisRequest($mealController, $userId, $profile)
+    {
+        $mealId = (int) ($_POST['meal_id'] ?? 0);
+        if ($mealId <= 0) {
+            $this->respondJson([
+                'success' => false,
+                'message' => 'Meal saved, but AI analysis is temporarily unavailable.'
+            ], 400);
+        }
+
+        $meal = $mealController->getMealForUser($mealId, $userId);
+        if (!$meal) {
+            $this->respondJson([
+                'success' => false,
+                'message' => 'Meal saved, but AI analysis is temporarily unavailable.'
+            ], 404);
+        }
+
+        $ingredients = $mealController->listMealIngredientsForUser($mealId, $userId);
+        if (!$ingredients) {
+            $this->respondJson([
+                'success' => false,
+                'message' => 'Meal saved, but AI analysis is temporarily unavailable.'
+            ], 422);
+        }
+
+        $error = '';
+        $analysis = $this->analyzeSavedMeal($meal, $ingredients, $profile, $error);
+        if (!$analysis) {
+            $analysis = $this->buildEstimatedMealAnalysis($ingredients, $profile);
+            $this->storeMealAnalysisIfPossible($mealController, $mealId, $userId, $analysis);
+            $this->respondJson([
+                'success' => true,
+                'analysis' => $analysis,
+                'estimated' => true
+            ]);
+        }
+
+        $this->storeMealAnalysisIfPossible($mealController, $mealId, $userId, $analysis);
+        $this->respondJson([
+            'success' => true,
+            'analysis' => $analysis
+        ]);
+    }
+
+    private function storeMealAnalysisIfPossible($mealController, $mealId, $userId, $analysis)
+    {
+        try {
+            $mealController->updateMealAiAnalysis($mealId, $userId, $analysis);
+        } catch (Exception $e) {
+            return;
+        }
+    }
+
+    private function buildEstimatedMealAnalysis($ingredients, $profile)
+    {
+        $totals = [
+            'protein' => 0.0,
+            'carbs' => 0.0,
+            'fat' => 0.0,
+            'cost' => 0.0
+        ];
+        $names = [];
+
+        foreach ($ingredients as $ingredient) {
+            $quantityG = (float) ($ingredient['quantity_g'] ?? 0);
+            if ($quantityG <= 0) {
+                continue;
+            }
+
+            $ratio = $quantityG / 100.0;
+            $totals['protein'] += (float) ($ingredient['protein'] ?? 0) * $ratio;
+            $totals['carbs'] += (float) ($ingredient['carbs'] ?? 0) * $ratio;
+            $totals['fat'] += (float) ($ingredient['fat'] ?? 0) * $ratio;
+            $totals['cost'] += (float) ($ingredient['price'] ?? 0) * $ratio;
+            $names[] = strtolower((string) ($ingredient['name'] ?? ''));
+        }
+
+        $goalText = strtolower((string) ($profile['goal'] ?? ''));
+        $budget = (float) ($profile['budget'] ?? 0);
+        $hasVegetable = preg_match('/tomato|broccoli|salad|lettuce|spinach|carrot|cucumber|pepper|vegetable/', implode(' ', $names)) === 1;
+        $score = 45;
+        $good = [];
+        $improve = [];
+
+        if ($totals['protein'] >= 25) {
+            $score += 20;
+            $good[] = 'High protein';
+        } elseif ($totals['protein'] >= 12) {
+            $score += 12;
+            $good[] = 'Some protein';
+        } else {
+            $improve[] = 'Add protein';
+        }
+
+        if ($budget <= 0 || $totals['cost'] <= $budget) {
+            $score += 15;
+            $budgetFeedback = 'Fits';
+            $good[] = 'Budget-friendly';
+        } elseif ($totals['cost'] <= $budget * 1.25) {
+            $score += 6;
+            $budgetFeedback = 'High';
+            $improve[] = 'Lower cost';
+        } else {
+            $budgetFeedback = 'Too expensive';
+            $improve[] = 'Use cheaper items';
+        }
+
+        if ($hasVegetable) {
+            $score += 10;
+        } else {
+            $improve[] = 'Add vegetables';
+        }
+
+        if ($totals['fat'] > 35) {
+            $score -= 8;
+            $improve[] = 'Reduce oil';
+        }
+
+        $goalFeedback = 'Partial';
+        if ($goalText !== '') {
+            if ((strpos($goalText, 'gain') !== false || strpos($goalText, 'bulk') !== false) && $totals['protein'] >= 20) {
+                $score += 8;
+                $goalFeedback = 'Matches';
+            } elseif ((strpos($goalText, 'loss') !== false || strpos($goalText, 'cut') !== false) && $totals['fat'] <= 25) {
+                $score += 8;
+                $goalFeedback = 'Matches';
+            }
+        }
+
+        $score = max(0, min(100, (int) round($score)));
+
+        return [
+            'score' => $score,
+            'label' => $this->scoreLabelFor($score),
+            'reason' => 'Estimated because Gemini unavailable.',
+            'good' => array_slice(array_values(array_unique($good ?: ['Saved meal'])), 0, 2),
+            'improve' => array_slice(array_values(array_unique($improve ?: ['Add variety'])), 0, 2),
+            'budget' => $budgetFeedback,
+            'goal' => $goalFeedback
+        ];
+    }
+
+    private function respondJson($payload, $status = 200)
+    {
+        http_response_code($status);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    private function callGeminiForMealAnalysis($meal, $ingredients, $profile, &$error)
     {
         $apiKey = defined('GEMINI_API_KEY') && GEMINI_API_KEY !== ''
             ? GEMINI_API_KEY
@@ -380,94 +506,57 @@ class MealsPageController
             return '';
         }
 
-        $ingredientMap = $this->indexIngredientsById($ingredients);
-        $summary = $this->summarizeAiMealItems($ingredients, $ingredientMap);
-        $nutritionComplete = count(array_filter($ingredients, fn($ingredient) => empty($ingredient['nutrition_complete']))) === 0;
         $ingredientLines = array_map(function ($ingredient) {
             return sprintf(
-                '- %s: %.1fg, %.1f kcal/100g, %.1fg protein/100g, %.1fg carbs/100g, %.1fg fat/100g, %.2f price/100g',
+                '%s %.0fg',
                 $ingredient['name'],
-                (float) ($ingredient['quantity_g'] ?? 0),
-                (float) ($ingredient['calories'] ?? 0),
-                (float) ($ingredient['protein'] ?? 0),
-                (float) ($ingredient['carbs'] ?? 0),
-                (float) ($ingredient['fat'] ?? 0),
-                (float) ($ingredient['price'] ?? 0)
+                (float) ($ingredient['quantity_g'] ?? 0)
             );
-        }, $ingredients);
-
-        $objectiveLines = [];
-        foreach ($objectives as $objective) {
-            $objectiveLines[] = sprintf(
-                '- %s (%s, %s minutes, %s)',
-                trim((string) ($objective['title'] ?? 'Objective')),
-                trim((string) ($objective['exercise_name'] ?? 'exercise')),
-                (int) ($objective['target_duration_min'] ?? 0),
-                trim((string) ($objective['status'] ?? 'active'))
-            );
-        }
+        }, array_slice($ingredients, 0, 10));
 
         $prompt = implode("\n", [
-            'Analyze this NutriBudget custom meal after it was saved.',
-            'Return only valid JSON. Do not include markdown or text outside JSON.',
-            'Score out of 100 using this guide: 25 points matches user goal, 20 points ingredient balance, 20 points budget friendly, 15 points protein/energy quality, 10 points vegetables/fiber/micronutrients, 10 points low excessive sugar/fat/salt.',
-            'If nutrition data is incomplete or based only on ingredient estimates, clearly say the score is estimated. Do not claim exact calories unless exact data is available.',
-            'Focus on budget, goal compatibility, ingredient quality, balance, protein, vegetables, sugar/fat/salt level, and overall usefulness.',
-            'Meal name: ' . trim((string) ($meal['name'] ?? '')),
-            'Meal type: ' . trim((string) ($meal['type'] ?? '')),
-            'Meal description: ' . (trim((string) ($meal['description'] ?? '')) ?: 'not available'),
-            'Ingredients and quantities:',
-            implode("\n", $ingredientLines),
-            'Estimated totals from the ingredient table: ' . sprintf(
-                '%d kcal, %.1fg protein, %.1fg carbs, %.1fg fat, %.2f cost',
-                (int) $summary['calories'],
-                (float) $summary['protein'],
-                (float) $summary['carbs'],
-                (float) $summary['fat'],
-                (float) $summary['cost']
-            ),
-            'Nutrition and price data complete: ' . ($nutritionComplete ? 'yes' : 'no'),
+            'Score this meal. Return only compact valid JSON.',
+            'Keys: score,label,reason,good,improve,budget,goal.',
+            'reason max 12 words. good max 2 short items. improve max 2 short items.',
+            'budget enum: Fits, High, Too expensive. goal enum: Matches, Partial, No.',
+            'score 0-100. No markdown.',
+            'Meal: ' . trim((string) ($meal['name'] ?? '')),
+            'Ingredients: ' . implode(', ', $ingredientLines),
             'User goal: ' . (trim((string) ($profile['goal'] ?? '')) ?: 'not specified'),
-            'User budget: ' . number_format((float) ($profile['budget'] ?? 0), 2),
-            'User weight kg: ' . (trim((string) ($profile['weight'] ?? '')) ?: 'not specified'),
-            'User height cm: ' . (trim((string) ($profile['height'] ?? '')) ?: 'not specified'),
-            'Health conditions: ' . (trim((string) ($profile['disease'] ?? '')) ?: 'none specified'),
-            'Allergies: ' . (trim((string) ($profile['allergy'] ?? '')) ?: 'none specified'),
-            'Fitness objectives:',
-            $objectiveLines ? implode("\n", $objectiveLines) : 'none specified',
-            'User name: ' . (trim((string) ($user['name'] ?? '')) ?: 'not specified')
+            'User budget: ' . number_format((float) ($profile['budget'] ?? 0), 2)
         ]);
 
         $schema = [
             'type' => 'object',
             'properties' => [
                 'score' => ['type' => 'integer'],
-                'score_label' => ['type' => 'string'],
+                'label' => ['type' => 'string'],
                 'reason' => ['type' => 'string'],
-                'strengths' => [
+                'good' => [
                     'type' => 'array',
                     'items' => ['type' => 'string']
                 ],
-                'weaknesses' => [
+                'improve' => [
                     'type' => 'array',
                     'items' => ['type' => 'string']
                 ],
-                'recommended_changes' => [
-                    'type' => 'array',
-                    'items' => ['type' => 'string']
+                'budget' => [
+                    'type' => 'string',
+                    'enum' => ['Fits', 'High', 'Too expensive']
                 ],
-                'budget_feedback' => ['type' => 'string'],
-                'goal_feedback' => ['type' => 'string']
+                'goal' => [
+                    'type' => 'string',
+                    'enum' => ['Matches', 'Partial', 'No']
+                ]
             ],
             'required' => [
                 'score',
-                'score_label',
+                'label',
                 'reason',
-                'strengths',
-                'weaknesses',
-                'recommended_changes',
-                'budget_feedback',
-                'goal_feedback'
+                'good',
+                'improve',
+                'budget',
+                'goal'
             ]
         ];
 
@@ -479,19 +568,20 @@ class MealsPageController
             ]],
             'generationConfig' => [
                 'temperature' => 0.25,
+                'maxOutputTokens' => 120,
                 'responseMimeType' => 'application/json',
                 'responseSchema' => $schema
             ]
         ]);
 
         $lastMessage = 'Gemini could not analyze the meal right now.';
-        foreach ($this->getGeminiModels() as $model) {
+        foreach (array_slice($this->getGeminiModels(), 0, 1) as $model) {
             $url = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent';
             $transportError = '';
             $response = $this->postJson($url, $body, [
                 'Content-Type: application/json',
                 'x-goog-api-key: ' . $apiKey
-            ], $status, $transportError);
+            ], $status, $transportError, 8, 30);
 
             if ($response !== '' && $status >= 200 && $status < 300) {
                 $data = json_decode($response, true);
@@ -530,20 +620,19 @@ class MealsPageController
         }
 
         $score = max(0, min(100, (int) round((float) $data['score'])));
-        $scoreLabel = $this->cleanAiText($data['score_label'] ?? '', 50);
-        if ($scoreLabel === '') {
-            $scoreLabel = $this->scoreLabelFor($score);
+        $label = $this->cleanAiText($data['label'] ?? '', 50);
+        if ($label === '') {
+            $label = $this->scoreLabelFor($score);
         }
 
         return [
             'score' => $score,
-            'score_label' => $scoreLabel,
-            'reason' => $this->cleanAiText($data['reason'] ?? 'Gemini did not provide a detailed reason.', 1200),
-            'strengths' => $this->cleanAiList($data['strengths'] ?? [], 'No clear strengths were returned.'),
-            'weaknesses' => $this->cleanAiList($data['weaknesses'] ?? [], 'No specific weaknesses were returned.'),
-            'recommended_changes' => $this->cleanAiList($data['recommended_changes'] ?? [], 'No recommended changes were returned.'),
-            'budget_feedback' => $this->cleanAiText($data['budget_feedback'] ?? 'Budget feedback was not returned.', 800),
-            'goal_feedback' => $this->cleanAiText($data['goal_feedback'] ?? 'Goal feedback was not returned.', 800)
+            'label' => $label,
+            'reason' => $this->limitWords($this->cleanAiText($data['reason'] ?? 'Estimated from ingredients.', 120), 12),
+            'good' => $this->cleanAiList($data['good'] ?? [], 'Balanced', 2, 32),
+            'improve' => $this->cleanAiList($data['improve'] ?? [], 'Add vegetables', 2, 32),
+            'budget' => $this->normalizeEnumText($data['budget'] ?? '', ['Fits', 'High', 'Too expensive'], 'Fits'),
+            'goal' => $this->normalizeEnumText($data['goal'] ?? '', ['Matches', 'Partial', 'No'], 'Partial')
         ];
     }
 
@@ -562,21 +651,43 @@ class MealsPageController
         return 'Needs improvement';
     }
 
-    private function cleanAiList($value, $fallback)
+    private function cleanAiList($value, $fallback, $maxItems = 2, $maxLength = 32)
     {
         $items = [];
         foreach ((array) $value as $item) {
-            $item = $this->cleanAiText($item, 220);
+            $item = $this->cleanAiText($item, $maxLength);
             if ($item !== '') {
                 $items[] = $item;
             }
 
-            if (count($items) >= 6) {
+            if (count($items) >= $maxItems) {
                 break;
             }
         }
 
         return $items ?: [$fallback];
+    }
+
+    private function limitWords($value, $maxWords)
+    {
+        $words = preg_split('/\s+/', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY);
+        if (!$words) {
+            return '';
+        }
+
+        return implode(' ', array_slice($words, 0, $maxWords));
+    }
+
+    private function normalizeEnumText($value, $allowed, $fallback)
+    {
+        $value = $this->cleanAiText($value, 40);
+        foreach ($allowed as $option) {
+            if (strcasecmp($value, $option) === 0) {
+                return $option;
+            }
+        }
+
+        return $fallback;
     }
 
     private function cleanAiText($value, $maxLength)
@@ -1045,7 +1156,7 @@ class MealsPageController
         return $suggestions;
     }
 
-    private function postJson($url, $body, $headers, &$status, &$transportError = '')
+    private function postJson($url, $body, $headers, &$status, &$transportError = '', $connectTimeout = 8, $timeout = 45)
     {
         $status = 0;
         $transportError = '';
@@ -1060,8 +1171,8 @@ class MealsPageController
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_CONNECTTIMEOUT => 8,
-            CURLOPT_TIMEOUT => 45
+            CURLOPT_CONNECTTIMEOUT => $connectTimeout,
+            CURLOPT_TIMEOUT => $timeout
         ]);
         $response = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1102,6 +1213,20 @@ class MealsPageController
             'sort' => 'protein',
             'dir' => $dir
         ]);
+    }
+
+    private function buildFastMealsRedirectUrl($url)
+    {
+        $parts = parse_url($url);
+        $path = $parts['path'] ?? 'meals.php';
+        $params = [];
+        if (!empty($parts['query'])) {
+            parse_str($parts['query'], $params);
+        }
+
+        $params['load_videos'] = '0';
+
+        return $path . '?' . http_build_query($params);
     }
 
     private function buildMealCoach($meal, $ingredients)
