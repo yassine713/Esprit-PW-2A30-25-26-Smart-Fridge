@@ -6,21 +6,32 @@ class ExerciseModel
     public function listExercises()
     {
         $db = config::getConnexion();
+        $this->ensureExerciseColumns($db);
         return $db->query('SELECT * FROM exercise ORDER BY name')->fetchAll();
     }
 
-    public function addExercise($name)
+    public function addExercise($name, $youtubeUrl = '')
     {
         $db = config::getConnexion();
-        $stmt = $db->prepare('INSERT INTO exercise (name) VALUES (:name)');
-        $stmt->execute(['name' => $name]);
+        $this->ensureExerciseColumns($db);
+        $stmt = $db->prepare('INSERT INTO exercise (name, qr_token, youtube_url) VALUES (:name, :qr_token, :youtube_url)');
+        $stmt->execute([
+            'name' => $name,
+            'qr_token' => $this->generateQrToken(),
+            'youtube_url' => $this->normalizeYoutubeUrl($youtubeUrl)
+        ]);
     }
 
-    public function updateExercise($id, $name)
+    public function updateExercise($id, $name, $youtubeUrl = '')
     {
         $db = config::getConnexion();
-        $stmt = $db->prepare('UPDATE exercise SET name=:name WHERE id=:id');
-        $stmt->execute(['id' => $id, 'name' => $name]);
+        $this->ensureExerciseColumns($db);
+        $stmt = $db->prepare('UPDATE exercise SET name=:name, youtube_url=:youtube_url WHERE id=:id');
+        $stmt->execute([
+            'id' => $id,
+            'name' => $name,
+            'youtube_url' => $this->normalizeYoutubeUrl($youtubeUrl)
+        ]);
     }
 
     public function deleteExercise($id)
@@ -33,7 +44,8 @@ class ExerciseModel
     public function listLogsByUser($userId)
     {
         $db = config::getConnexion();
-        $sql = 'SELECT ue.id, ue.exercise_id, ue.duration_min, ue.date_done, e.name
+        $this->ensureExerciseColumns($db);
+        $sql = 'SELECT ue.id, ue.exercise_id, ue.duration_min, ue.date_done, e.name, e.qr_token, e.youtube_url
                 FROM user_exercise ue
                 JOIN exercise e ON e.id = ue.exercise_id
                 WHERE ue.user_id = :uid
@@ -86,6 +98,82 @@ class ExerciseModel
             'dur' => $durationMin,
             'date' => $dateDone
         ]);
+    }
+
+    public function verifyQrToken($exerciseId, $token)
+    {
+        $db = config::getConnexion();
+        $this->ensureExerciseColumns($db);
+
+        $stmt = $db->prepare('SELECT id, name, qr_token FROM exercise WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $exerciseId]);
+        $exercise = $stmt->fetch();
+
+        if (!$exercise || $token === '' || empty($exercise['qr_token'])) {
+            return false;
+        }
+
+        return hash_equals($exercise['qr_token'], $token) ? $exercise : false;
+    }
+
+    public function saveYoutubeUrl($exerciseId, $youtubeUrl)
+    {
+        $db = config::getConnexion();
+        $this->ensureExerciseColumns($db);
+
+        $stmt = $db->prepare('UPDATE exercise SET youtube_url = :youtube_url WHERE id = :id');
+        $stmt->execute([
+            'id' => $exerciseId,
+            'youtube_url' => $this->normalizeYoutubeUrl($youtubeUrl)
+        ]);
+    }
+
+    public function getYoutubeUrl($exerciseId)
+    {
+        $db = config::getConnexion();
+        $this->ensureExerciseColumns($db);
+
+        $stmt = $db->prepare('SELECT youtube_url FROM exercise WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $exerciseId]);
+        $exercise = $stmt->fetch();
+
+        return trim((string) ($exercise['youtube_url'] ?? ''));
+    }
+
+    public function hasTutorial($exerciseId)
+    {
+        return $this->getYoutubeUrl($exerciseId) !== '';
+    }
+
+    public function logFromQrScan($exerciseId, $userId)
+    {
+        $db = config::getConnexion();
+
+        $durationStmt = $db->prepare(
+            'SELECT duration_min
+             FROM user_exercise
+             WHERE user_id = :uid AND exercise_id = :eid
+             ORDER BY date_done DESC, id DESC
+             LIMIT 1'
+        );
+        $durationStmt->execute([
+            'uid' => $userId,
+            'eid' => $exerciseId
+        ]);
+        $lastLog = $durationStmt->fetch();
+        $durationMin = max(1, (int) ($lastLog['duration_min'] ?? 15));
+
+        $stmt = $db->prepare(
+            'INSERT INTO user_exercise (user_id, exercise_id, duration_min, date_done)
+             VALUES (:uid, :eid, :dur, CURDATE())'
+        );
+        $stmt->execute([
+            'uid' => $userId,
+            'eid' => $exerciseId,
+            'dur' => $durationMin
+        ]);
+
+        return $durationMin;
     }
 
     public function updateLog($logId, $userId, $exerciseId, $durationMin, $dateDone)
@@ -173,6 +261,62 @@ class ExerciseModel
         $db = config::getConnexion();
         $stmt = $db->prepare('DELETE FROM objective WHERE id=:id AND user_id=:uid');
         $stmt->execute(['id' => $objectiveId, 'uid' => $userId]);
+    }
+
+    private function ensureExerciseColumns($db)
+    {
+        if (!$this->exerciseColumnExists($db, 'qr_token')) {
+            $db->exec('ALTER TABLE exercise ADD qr_token VARCHAR(64) DEFAULT NULL UNIQUE');
+        }
+
+        if (!$this->exerciseColumnExists($db, 'youtube_url')) {
+            $db->exec('ALTER TABLE exercise ADD youtube_url VARCHAR(500) NULL');
+        }
+
+        $stmt = $db->query("SELECT id FROM exercise WHERE qr_token IS NULL OR qr_token = ''");
+        $missingTokenExercises = $stmt->fetchAll();
+
+        foreach ($missingTokenExercises as $exercise) {
+            $update = $db->prepare('UPDATE exercise SET qr_token = :qr_token WHERE id = :id');
+            $update->execute([
+                'id' => $exercise['id'],
+                'qr_token' => $this->generateQrToken()
+            ]);
+        }
+    }
+
+    private function exerciseColumnExists($db, $columnName)
+    {
+        $stmt = $db->prepare(
+            'SELECT COUNT(*) AS column_exists
+             FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE()
+               AND TABLE_NAME = :table_name
+               AND COLUMN_NAME = :column_name'
+        );
+        $stmt->execute([
+            'table_name' => 'exercise',
+            'column_name' => $columnName
+        ]);
+        $columnInfo = $stmt->fetch();
+
+        return (int) ($columnInfo['column_exists'] ?? 0) > 0;
+    }
+
+    private function generateQrToken()
+    {
+        return bin2hex(random_bytes(16));
+    }
+
+    private function normalizeYoutubeUrl($youtubeUrl)
+    {
+        $youtubeUrl = trim((string) $youtubeUrl);
+
+        if ($youtubeUrl === '' || strlen($youtubeUrl) > 500 || !filter_var($youtubeUrl, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        return $youtubeUrl;
     }
 }
 ?>

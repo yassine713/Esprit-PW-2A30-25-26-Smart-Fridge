@@ -1271,7 +1271,7 @@ class MealsPageController
 
     private function shouldLookupCookingVideos()
     {
-        return ($_GET['load_videos'] ?? '1') !== '0';
+        return ($_GET['load_videos'] ?? '0') === '1';
     }
 
     private function buildCookingVideoQuery($mealName, $ingredientNames)

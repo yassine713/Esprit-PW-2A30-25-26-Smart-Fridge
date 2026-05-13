@@ -15,6 +15,47 @@ $favoriteExercise = $exerciseStats['favorite'] ?? null;
 $exerciseDistribution = $exerciseStats['distribution'] ?? [];
 $totalExerciseMinutes = (int) ($exerciseStats['total_duration'] ?? 0);
 $totalExerciseLogs = (int) ($exerciseStats['total_logs'] ?? 0);
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$hostOnly = strtolower(explode(':', $host)[0]);
+$port = strpos($host, ':') !== false ? ':' . substr(strrchr($host, ':'), 1) : '';
+if (in_array($hostOnly, ['localhost', '127.0.0.1', '::1'], true)) {
+  $localIpCandidates = [
+    $_SERVER['SERVER_ADDR'] ?? '',
+    $_SERVER['LOCAL_ADDR'] ?? '',
+    gethostbyname(gethostname())
+  ];
+  foreach ($localIpCandidates as $localIp) {
+    if (filter_var($localIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) && strpos($localIp, '127.') !== 0) {
+      $host = $localIp . $port;
+      break;
+    }
+  }
+}
+$projectBase = rtrim(str_replace('\\', '/', dirname(dirname($_SERVER['SCRIPT_NAME'] ?? '/Web-Project/view/exercises.php'))), '/');
+if ($projectBase === '/' || $projectBase === '.') {
+  $projectBase = '';
+}
+$scanBaseUrl = $scheme . '://' . $host . $projectBase . '/scan.php';
+$defaultTutorialUrls = [
+  'pilates' => 'https://www.youtube.com/watch?v=7rVha5hXMGQ',
+  'push-ups' => 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+  'push ups' => 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+  'cycling' => 'https://www.youtube.com/watch?v=8LZ5wZgW5lU',
+  'yoga' => 'https://www.youtube.com/watch?v=v7AYKMP6rOE',
+  'squats' => 'https://www.youtube.com/watch?v=aclHkVaku9U',
+  'squat' => 'https://www.youtube.com/watch?v=aclHkVaku9U'
+];
+function exercise_tutorial_url($exercise, $defaultTutorialUrls)
+{
+  $savedUrl = trim((string) ($exercise['youtube_url'] ?? ''));
+  if ($savedUrl !== '') {
+    return $savedUrl;
+  }
+
+  $name = strtolower(trim((string) ($exercise['name'] ?? '')));
+  return $defaultTutorialUrls[$name] ?? '';
+}
 $chartColors = ['#ffffff', '#f8e7bd', '#9ccf75', '#72c5a4', '#d89b2b', '#bfe8c4'];
 $chartStops = [];
 $chartStart = 0;
@@ -162,6 +203,47 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
               </div>
 
               <div class="card exercise-card">
+                <h3>Exercise QR Codes</h3>
+                <?php if (!$exerciseList): ?>
+                  <p class="muted">No exercises available.</p>
+                <?php else: ?>
+                  <div class="qr-exercise-list">
+                    <?php foreach ($exerciseList as $exercise): ?>
+                      <?php
+                        $qrUrl = $scanBaseUrl . '?exercise_id=' . (int) $exercise['id'] . '&token=' . rawurlencode($exercise['qr_token'] ?? '');
+                        $tutorialUrl = exercise_tutorial_url($exercise, $defaultTutorialUrls);
+                      ?>
+                      <div class="qr-exercise-row">
+                        <strong><?= htmlspecialchars($exercise['name']) ?></strong>
+                        <div class="qr-exercise-actions">
+                          <button
+                            class="icon-btn qr-open-btn"
+                            type="button"
+                            data-qr-open
+                            data-qr-url="<?= htmlspecialchars($qrUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            data-exercise-name="<?= htmlspecialchars($exercise['name'], ENT_QUOTES, 'UTF-8') ?>"
+                          >
+                            Log QR
+                          </button>
+                          <?php if ($tutorialUrl !== ''): ?>
+                            <button
+                              class="icon-btn tutorial-qr-btn"
+                              type="button"
+                              data-tutorial-qr-open
+                              data-tutorial-url="<?= htmlspecialchars($tutorialUrl, ENT_QUOTES, 'UTF-8') ?>"
+                              data-exercise-name="<?= htmlspecialchars($exercise['name'], ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                              Tutorial QR
+                            </button>
+                          <?php endif; ?>
+                        </div>
+                      </div>
+                    <?php endforeach; ?>
+                  </div>
+                <?php endif; ?>
+              </div>
+
+              <div class="card exercise-card">
                 <h3>My Exercises</h3>
                 <?php if (!$logs): ?>
                   <p class="muted">No exercises yet.</p>
@@ -169,6 +251,10 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
                   <div class="reclamations exercise-list">
                     <?php foreach ($logs as $log): ?>
                       <div class="reclamation exercise-log-item">
+                        <?php
+                          $logQrUrl = $scanBaseUrl . '?exercise_id=' . (int) $log['exercise_id'] . '&token=' . rawurlencode($log['qr_token'] ?? '');
+                          $tutorialUrl = exercise_tutorial_url($log, $defaultTutorialUrls);
+                        ?>
                         <div class="rec-main">
                           <form method="post" class="inline-edit exercise-log-edit" novalidate>
                             <input type="hidden" name="action" value="update_log" />
@@ -186,6 +272,26 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
                           </form>
                         </div>
                         <div class="actions">
+                          <button
+                            class="icon-btn qr-action-btn"
+                            type="button"
+                            data-qr-open
+                            data-qr-url="<?= htmlspecialchars($logQrUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            data-exercise-name="<?= htmlspecialchars($log['name'], ENT_QUOTES, 'UTF-8') ?>"
+                          >
+                            Log QR
+                          </button>
+                          <?php if ($tutorialUrl !== ''): ?>
+                            <button
+                              class="icon-btn tutorial-qr-btn"
+                              type="button"
+                              data-tutorial-qr-open
+                              data-tutorial-url="<?= htmlspecialchars($tutorialUrl, ENT_QUOTES, 'UTF-8') ?>"
+                              data-exercise-name="<?= htmlspecialchars($log['name'], ENT_QUOTES, 'UTF-8') ?>"
+                            >
+                              Tutorial QR
+                            </button>
+                          <?php endif; ?>
                           <form method="post">
                             <input type="hidden" name="action" value="delete_log" />
                             <input type="hidden" name="log_id" value="<?= $log['id'] ?>" />
@@ -206,7 +312,7 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
                   <input type="hidden" name="action" value="add_objective" />
                   <label>
                     <span>Title</span>
-                    <input id="obj-title" name="title" type="text" placeholder="e.g., Running Goal" pattern="[A-Za-z ]{3,}" />
+                    <input id="obj-title" name="title" type="text" placeholder="e.g., Running Goal" />
                     <small class="error" data-error-for="obj-title"></small>
                   </label>
                   <label>
@@ -278,7 +384,7 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
                           <form method="post" class="inline-edit objective-edit" novalidate>
                             <input type="hidden" name="action" value="update_objective" />
                             <input type="hidden" name="objective_id" value="<?= $objective['id'] ?>" />
-                            <input class="objective-title-edit" type="text" name="title" value="<?= htmlspecialchars($objective['title']) ?>" pattern="[A-Za-z ]{3,}" />
+                            <input class="objective-title-edit" type="text" name="title" value="<?= htmlspecialchars($objective['title']) ?>" />
                             <select name="exercise_id">
                               <?php foreach ($exerciseList as $ex): ?>
                                 <option value="<?= $ex['id'] ?>" <?= (int) $ex['id'] === (int) $objective['exercise_id'] ? 'selected' : '' ?>><?= htmlspecialchars($ex['name']) ?></option>
@@ -316,6 +422,29 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
         <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>
+  </div>
+
+  <div class="qr-modal" data-qr-modal hidden>
+    <div class="qr-modal-panel" role="dialog" aria-modal="true" aria-labelledby="qr-modal-title">
+      <div class="qr-modal-head">
+        <h3 id="qr-modal-title" data-qr-title>Exercise QR Code</h3>
+        <button class="icon-btn" type="button" data-qr-close>Close</button>
+      </div>
+      <img class="qr-modal-image" data-qr-image alt="Exercise QR Code" width="220" height="220" />
+      <a class="qr-modal-link" data-qr-link href="#"></a>
+    </div>
+  </div>
+
+  <div class="qr-modal" data-tutorial-qr-modal hidden>
+    <div class="qr-modal-panel" role="dialog" aria-modal="true" aria-labelledby="tutorial-qr-modal-title">
+      <div class="qr-modal-head">
+        <h3 id="tutorial-qr-modal-title" data-tutorial-qr-title>Watch Tutorial</h3>
+        <button class="icon-btn" type="button" data-tutorial-qr-close>Close</button>
+      </div>
+      <p class="tutorial-qr-copy">Scan with your phone to watch the tutorial video</p>
+      <img class="qr-modal-image" data-tutorial-qr-image alt="Exercise tutorial QR Code" width="200" height="200" />
+      <a class="qr-modal-link" data-tutorial-qr-link href="#" target="_blank" rel="noopener"></a>
+    </div>
   </div>
 
   <script>
@@ -362,15 +491,75 @@ $chartStyle = $chartStops ? 'background: conic-gradient(' . implode(', ', $chart
       editForm.addEventListener('submit', (e) => {
         const titleInput = editForm.querySelector('.objective-title-edit');
         if (titleInput && !/^[A-Za-z ]{3,}$/.test(titleInput.value.trim())) {
-          titleInput.setCustomValidity('Title must contain letters only.');
-          titleInput.reportValidity();
           e.preventDefault();
+          titleInput.classList.add('input-error');
         } else if (titleInput) {
-          titleInput.setCustomValidity('');
+          titleInput.classList.remove('input-error');
         }
       });
     });
+
+    const tutorialModal = document.querySelector('[data-tutorial-qr-modal]');
+    const tutorialImage = document.querySelector('[data-tutorial-qr-image]');
+    const tutorialLink = document.querySelector('[data-tutorial-qr-link]');
+    const tutorialTitle = document.querySelector('[data-tutorial-qr-title]');
+    const tutorialCloseButtons = document.querySelectorAll('[data-tutorial-qr-close]');
+
+    function openTutorialQrModal(button) {
+      const tutorialUrl = button.getAttribute('data-tutorial-url') || '';
+      const exerciseName = button.getAttribute('data-exercise-name') || 'Exercise';
+
+      if (!tutorialUrl || !tutorialModal || !tutorialImage || !tutorialLink) return;
+
+      tutorialImage.onerror = function () {
+        tutorialImage.onerror = null;
+        tutorialImage.src = '../qr_image.php?data=' + encodeURIComponent(tutorialUrl);
+      };
+      tutorialImage.src = 'https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=' + encodeURIComponent(tutorialUrl);
+      tutorialImage.alt = 'Tutorial QR Code for ' + exerciseName;
+      tutorialLink.href = tutorialUrl;
+      tutorialLink.textContent = tutorialUrl;
+
+      if (tutorialTitle) {
+        tutorialTitle.textContent = 'Watch Tutorial: ' + exerciseName;
+      }
+
+      tutorialModal.hidden = false;
+      tutorialModal.classList.add('is-open');
+    }
+
+    function closeTutorialQrModal() {
+      if (!tutorialModal || !tutorialImage) return;
+      tutorialModal.hidden = true;
+      tutorialModal.classList.remove('is-open');
+      tutorialImage.onerror = null;
+      tutorialImage.removeAttribute('src');
+    }
+
+    document.addEventListener('click', (event) => {
+      const tutorialButton = event.target.closest('[data-tutorial-qr-open]');
+
+      if (tutorialButton) {
+        openTutorialQrModal(tutorialButton);
+        return;
+      }
+
+      if (event.target === tutorialModal) {
+        closeTutorialQrModal();
+      }
+    });
+
+    tutorialCloseButtons.forEach((button) => {
+      button.addEventListener('click', closeTutorialQrModal);
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && tutorialModal && !tutorialModal.hidden) {
+        closeTutorialQrModal();
+      }
+    });
   </script>
+  <script src="../assets/qr.js"></script>
   <script src="user-panel.js"></script>
 </body>
 </html>

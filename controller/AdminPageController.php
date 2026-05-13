@@ -236,10 +236,17 @@ class AdminPageController
                 $ingredientController->delete((int) ($_POST['ingredient_id'] ?? 0));
             }
             if ($action === 'add_exercise') {
-                $exerciseController->addExercise(trim($_POST['name'] ?? ''));
+                $exerciseController->addExercise(
+                    trim($_POST['name'] ?? ''),
+                    trim($_POST['youtube_url'] ?? '')
+                );
             }
             if ($action === 'update_exercise') {
-                $exerciseController->updateExercise((int) ($_POST['exercise_id'] ?? 0), trim($_POST['name'] ?? ''));
+                $exerciseController->updateExercise(
+                    (int) ($_POST['exercise_id'] ?? 0),
+                    trim($_POST['name'] ?? ''),
+                    trim($_POST['youtube_url'] ?? '')
+                );
             }
             if ($action === 'delete_exercise') {
                 $exerciseController->deleteExercise((int) ($_POST['exercise_id'] ?? 0));

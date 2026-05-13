@@ -24,10 +24,18 @@ $mealsPageController = new MealsPageController();
 $isProteinSort = ($sort ?? '') === 'protein';
 $organizeHref = $isProteinSort ? 'meals.php' : 'meals.php?sort=protein&dir=desc';
 $organizeLabel = $isProteinSort ? 'Clear' : 'Organize';
-$isLoadingVideos = ($_GET['load_videos'] ?? '1') !== '0';
-$loadVideosParams = $isProteinSort ? ['sort' => $sort, 'dir' => $dir] : [];
-$loadVideosParams['load_videos'] = '1';
-$loadVideosHref = 'meals.php?' . http_build_query($loadVideosParams);
+$isLoadingVideos = ($_GET['load_videos'] ?? '0') === '1';
+$isLoadingMealPhotos = ($_GET['load_meal_photos'] ?? '0') === '1';
+$mediaParams = [
+  'load_videos' => $isLoadingVideos ? '0' : '1',
+  'load_meal_photos' => $isLoadingMealPhotos ? '0' : '1'
+];
+if ($isProteinSort) {
+  $mediaParams['sort'] = 'protein';
+  $mediaParams['dir'] = $dir;
+}
+$mediaHref = 'meals.php?' . http_build_query($mediaParams);
+$mediaLabel = ($isLoadingVideos || $isLoadingMealPhotos) ? 'Fast mode' : 'Load media';
 $totalProteinG = array_sum($mealProteinMap);
 $averageProteinG = count($meals) > 0 ? $totalProteinG / count($meals) : 0;
 $mealVideoError = '';
@@ -96,11 +104,13 @@ function meal_ingredient_text($ingredients)
 
 function meal_image_url($meal, $ingredients)
 {
-  if (mealdb_lookup_enabled()) {
-    $mealPhotoUrl = mealdb_cooked_meal_image_url($meal, $ingredients);
-    if ($mealPhotoUrl !== '') {
-      return $mealPhotoUrl;
-    }
+  if (!mealdb_lookup_enabled()) {
+    return meal_placeholder_image_url($meal);
+  }
+
+  $mealPhotoUrl = mealdb_cooked_meal_image_url($meal, $ingredients);
+  if ($mealPhotoUrl !== '') {
+    return $mealPhotoUrl;
   }
 
   return meal_generated_image_url($meal, $ingredients);
@@ -108,7 +118,7 @@ function meal_image_url($meal, $ingredients)
 
 function mealdb_lookup_enabled()
 {
-  return ($_GET['load_meal_photos'] ?? '1') !== '0';
+  return ($_GET['load_meal_photos'] ?? '0') === '1';
 }
 
 function meal_generated_image_url($meal, $ingredients)
@@ -638,15 +648,13 @@ function meal_placeholder_image_url($meal)
                   </button>
                 </form>
               <?php endif; ?>
+              <a class="btn soft tiny" href="<?= e($mediaHref) ?>"><?= e($mediaLabel) ?></a>
               <a class="btn soft tiny with-icon organize-btn" href="<?= e($organizeHref) ?>" aria-label="Organize meals by protein">
                 <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path fill="currentColor" d="M7 4h2v14l1.5-1.5 1.4 1.4L8 22 4.1 17.9l1.4-1.4L7 18V4zm10 2h-6V4h6c1.7 0 3 1.3 3 3v4c0 1.7-1.3 3-3 3h-2v4h-2V8h4c.6 0 1-.4 1-1V7c0-.6-.4-1-1-1zm-2 14h2v2h-2v-2z"/>
                 </svg>
                 <span><?= e($organizeLabel) ?></span>
               </a>
-              <?php if (!$isLoadingVideos): ?>
-                <a class="btn soft tiny" href="<?= e($loadVideosHref) ?>">Load cooking videos</a>
-              <?php endif; ?>
               <a class="btn primary tiny" href="#meal-form">Add Meal</a>
             </div>
           </div>
