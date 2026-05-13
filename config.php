@@ -36,8 +36,12 @@ if (!function_exists('app_load_env')) {
                 }
             }
 
-            putenv($key . '=' . $value);
-            $_ENV[$key] = $value;
+            if (getenv($key) === false) {
+                putenv($key . '=' . $value);
+            }
+
+            $envValue = getenv($key);
+            $_ENV[$key] = $envValue === false ? $value : $envValue;
             $_SERVER[$key] = $_ENV[$key];
         }
     }

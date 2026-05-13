@@ -14,6 +14,19 @@ $bmi = ($heightM > 0 && $weightKg > 0) ? round($weightKg / ($heightM * $heightM)
 $profileFields = ['height', 'weight', 'goal', 'budget', 'disease', 'allergy'];
 $filledProfileFields = count(array_filter($profileFields, fn($field) => trim((string) ($profile[$field] ?? '')) !== ''));
 $profileCompletion = (int) round(($filledProfileFields / count($profileFields)) * 100);
+$profileQrText = implode("\n", [
+  'NutriBudget Profile',
+  'Name: ' . ($user['name'] ?? ''),
+  'Email: ' . ($user['email'] ?? ''),
+  'Height: ' . (trim((string) ($profile['height'] ?? '')) !== '' ? ($profile['height'] . ' cm') : 'Not set'),
+  'Weight: ' . (trim((string) ($profile['weight'] ?? '')) !== '' ? ($profile['weight'] . ' kg') : 'Not set'),
+  'Goal: ' . (trim((string) ($profile['goal'] ?? '')) !== '' ? $profile['goal'] : 'Not set'),
+  'Monthly Budget: ' . (trim((string) ($profile['budget'] ?? '')) !== '' ? ('$' . $profile['budget']) : 'Not set'),
+  'Health Conditions: ' . (trim((string) ($profile['disease'] ?? '')) !== '' ? $profile['disease'] : 'None'),
+  'Allergies: ' . (trim((string) ($profile['allergy'] ?? '')) !== '' ? $profile['allergy'] : 'None')
+]);
+$profileQrUrl = '../qr_image.php?data=' . rawurlencode($profileQrText);
+$showProfileQr = $filledProfileFields > 0;
 ?>
 <!doctype html>
 <html lang="en">
@@ -22,6 +35,36 @@ $profileCompletion = (int) round(($filledProfileFields / count($profileFields)) 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NutriBudget | Profile</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    .profile-qr-card {
+      align-items: center;
+      display: grid;
+      gap: 18px;
+      grid-template-columns: auto 1fr;
+    }
+
+    .profile-qr-card img {
+      background: #fff;
+      border: 1px solid var(--user-line);
+      border-radius: var(--user-radius);
+      display: block;
+      height: 180px;
+      padding: 10px;
+      width: 180px;
+    }
+
+    .profile-qr-card textarea {
+      min-height: 132px;
+      resize: vertical;
+      width: 100%;
+    }
+
+    @media (max-width: 720px) {
+      .profile-qr-card {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
 <body>
   <div class="app" data-view="dashboard" data-page="profile">
@@ -132,6 +175,19 @@ $profileCompletion = (int) round(($filledProfileFields / count($profileFields)) 
 
           <button class="btn primary" type="submit">Save Changes</button>
         </form>
+        <?php if ($showProfileQr): ?>
+          <div class="card profile-qr-card">
+            <img src="<?= htmlspecialchars($profileQrUrl) ?>" alt="Profile QR code" />
+            <div>
+              <h3>Profile QR Code</h3>
+              <p class="muted">Scan this code to read the saved profile summary.</p>
+              <?php if (isset($_GET['saved'])): ?>
+                <p class="muted">Profile saved. QR code updated.</p>
+              <?php endif; ?>
+              <textarea readonly><?= htmlspecialchars($profileQrText) ?></textarea>
+            </div>
+          </div>
+        <?php endif; ?>
         <?php include __DIR__ . '/user_support_footer.php'; ?>
       </section>
     </main>

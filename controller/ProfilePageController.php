@@ -17,7 +17,7 @@ class ProfilePageController
                 trim($_POST['allergy'] ?? ''),
                 $_POST['budget'] ?? null
             );
-            header('Location: profile.php');
+            header('Location: profile.php?saved=1');
             exit;
         }
 

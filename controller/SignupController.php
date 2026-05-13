@@ -20,12 +20,15 @@ class SignupController
             $name = trim($_POST['name'] ?? '');
             $email = trim($_POST['email'] ?? '');
             $password = $_POST['password'] ?? '';
+            $recoveryCode = trim($_POST['recovery_code'] ?? '');
 
             $userController = new UserC();
-            if ($userController->getByEmail($email)) {
+            if (!preg_match('/^\d{4}$/', $recoveryCode)) {
+                $error = 'Recovery code must be exactly 4 numbers.';
+            } elseif ($userController->getByEmail($email)) {
                 $error = 'Email already exists.';
             } else {
-                $userId = $userController->register($name, $email, $password, 'user');
+                $userId = $userController->register($name, $email, $password, 'user', $recoveryCode);
                 $_SESSION['user'] = $userController->getById($userId);
                 header('Location: dashboard.php');
                 exit;

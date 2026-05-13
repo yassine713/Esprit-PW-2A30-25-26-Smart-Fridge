@@ -10,9 +10,9 @@ class UserC
         $this->model = new UserModel();
     }
 
-    public function register($name, $email, $password, $role = 'user')
+    public function register($name, $email, $password, $role = 'user', $recoveryCode = '')
     {
-        return $this->model->register($name, $email, $password, $role);
+        return $this->model->register($name, $email, $password, $role, $recoveryCode);
     }
 
     public function login($email, $password)
@@ -28,6 +28,31 @@ class UserC
     public function getById($id)
     {
         return $this->model->getById($id);
+    }
+
+    public function verifyRecoveryCode($email, $recoveryCode)
+    {
+        return $this->model->verifyRecoveryCode($email, $recoveryCode);
+    }
+
+    public function updatePassword($email, $password)
+    {
+        $this->model->updatePassword($email, $password);
+    }
+
+    public function getLoginSecurity($email)
+    {
+        return $this->model->getLoginSecurity($email);
+    }
+
+    public function recordFailedLogin($email)
+    {
+        return $this->model->recordFailedLogin($email);
+    }
+
+    public function resetLoginSecurity($email)
+    {
+        $this->model->resetLoginSecurity($email);
     }
 
     public function listUsers()

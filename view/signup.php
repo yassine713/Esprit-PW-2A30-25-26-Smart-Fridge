@@ -44,6 +44,11 @@ $signupController = new SignupController();
             <input type="password" name="password" id="signup-password" placeholder="Create a password" />
             <small class="error" data-error-for="signup-password"></small>
           </label>
+          <label>
+            <span>Password recovery code</span>
+            <input type="text" name="recovery_code" id="signup-recovery-code" placeholder="4 numbers" maxlength="4" inputmode="numeric" />
+            <small class="error" data-error-for="signup-recovery-code"></small>
+          </label>
           <button class="btn primary" type="submit">Create account</button>
         </form>
         <p class="muted">Already have an account? <a class="link" href="login.php">Sign in</a></p>
@@ -64,6 +69,7 @@ $signupController = new SignupController();
     const nameField = document.getElementById('signup-name');
     const emailField = document.getElementById('signup-email');
     const passField = document.getElementById('signup-password');
+    const recoveryCodeField = document.getElementById('signup-recovery-code');
 
     function setError(id, message) {
       const el = document.querySelector(`[data-error-for="${id}"]`);
@@ -79,10 +85,12 @@ $signupController = new SignupController();
       const nameOk = /^[A-Za-z\u00C0-\u00FF' -]{2,40}$/.test(nameField.value.trim());
       const emailOk = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(emailField.value.trim());
       const passOk = passField.value.trim().length >= 4;
+      const recoveryCodeOk = /^\d{4}$/.test(recoveryCodeField.value.trim());
 
       if (!nameOk) { setError('signup-name', 'Name must be letters only (min 2).'); ok = false; } else clearError('signup-name');
       if (!emailOk) { setError('signup-email', 'Enter a valid email.'); ok = false; } else clearError('signup-email');
       if (!passOk) { setError('signup-password', 'Password must be at least 4 characters.'); ok = false; } else clearError('signup-password');
+      if (!recoveryCodeOk) { setError('signup-recovery-code', 'Recovery code must be exactly 4 numbers.'); ok = false; } else clearError('signup-recovery-code');
 
       if (!ok) e.preventDefault();
     });
